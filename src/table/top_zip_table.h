@@ -8,12 +8,10 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 #include <memory>
 #include <stdio.h>
 
-#include "rocksdb/status.h"
 #include "rocksdb/enum_reflection.h"
 #include <table/top_table_reader.h> // for WarmupLevel
 
