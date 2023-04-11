@@ -14,6 +14,8 @@
 #include <terark/util/process.hpp>
 
 #ifndef _MSC_VER
+const char* git_version_hash_info_topling_zip_table_reader();
+__attribute__((weak))
 const char* git_version_hash_info_topling_rocks();
 #endif
 
@@ -285,26 +287,36 @@ json JS_TopZipTable_Global_Env() {
   });
 }
 
+static std::string HtmlGitHref(const char* git_repo, const char* git_hash) {
+  std::string ztab = HtmlEscapeMin(strstr(git_hash, "commit ") + strlen("commit "));
+  auto headstr = [](const std::string& s, auto pos) {
+    return terark::fstring(s.data(), pos - s.begin());
+  };
+  auto tailstr = [](const std::string& s, auto pos) {
+    return terark::fstring(&*pos, s.end() - pos);
+  };
+  auto ztab_sha_end = std::find_if(ztab.begin(), ztab.end(), &isspace);
+  terark::string_appender<> oss;
+  oss|"<pre>"
+     |"<a href='https://github.com/"|git_repo|"/commit/"
+     |headstr(ztab, ztab_sha_end)|"'>"
+     |headstr(ztab, ztab_sha_end)|"</a>"
+     |tailstr(ztab, ztab_sha_end)
+     |"</pre>";
+  return static_cast<std::string&&>(oss);
+}
 void JS_ZipTable_AddVersion(json& ver, bool html) {
   if (html) {
-    std::string ztab = HtmlEscapeMin(strstr(git_version_hash_info_topling_rocks(), "commit ") + strlen("commit "));
-    auto headstr = [](const std::string& s, auto pos) {
-      return terark::fstring(s.data(), pos - s.begin());
-    };
-    auto tailstr = [](const std::string& s, auto pos) {
-      return terark::fstring(&*pos, s.end() - pos);
-    };
-    auto ztab_sha_end = std::find_if(ztab.begin(), ztab.end(), &isspace);
-    terark::string_appender<> oss;
-    oss|"<pre>"
-       |"<a href='https://github.com/rockeet/topling-rocks/commit/"
-       |headstr(ztab, ztab_sha_end)|"'>"
-       |headstr(ztab, ztab_sha_end)|"</a>"
-       |tailstr(ztab, ztab_sha_end)
-       |"</pre>";
-    ver["gdzip-sst"] = static_cast<std::string&&>(oss);
+    ver["gdzip-reader"] = HtmlGitHref("topling/topling-zip_table_reader",
+                         git_version_hash_info_topling_zip_table_reader());
+    if (git_version_hash_info_topling_rocks) {
+      ver["gdzip-builder"] = HtmlGitHref("rockeet/topling-rocks",
+                            git_version_hash_info_topling_rocks());
+    }
   } else {
-    ver["gdzip-sst"] = git_version_hash_info_topling_rocks();
+    ver["gdzip-reader"] = git_version_hash_info_topling_zip_table_reader();
+    if (git_version_hash_info_topling_rocks)
+      ver["gdzip-builder"] = git_version_hash_info_topling_rocks();
   }
 }
 

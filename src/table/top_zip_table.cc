@@ -46,6 +46,8 @@ static std::once_flag PrintVersionHashInfoFlag;
 const char* git_version_hash_info_core();
 const char* git_version_hash_info_fsa();
 const char* git_version_hash_info_zbs();
+const char* git_version_hash_info_topling_zip_table_reader();
+__attribute__((weak))
 const char* git_version_hash_info_topling_rocks();
 #endif
 
@@ -57,7 +59,9 @@ void PrintVersionHashInfo(rocksdb::Logger* info_log) {
     INFO(info_log, "core %s", git_version_hash_info_core());
     INFO(info_log, "fsa %s", git_version_hash_info_fsa());
     INFO(info_log, "zbs %s", git_version_hash_info_zbs());
-    INFO(info_log, "topling-rocks %s", git_version_hash_info_topling_rocks());
+    INFO(info_log, "topling-zip_table_reader: %s", git_version_hash_info_topling_zip_table_reader());
+    if (git_version_hash_info_topling_rocks)
+      INFO(info_log, "topling-rocks %s", git_version_hash_info_topling_rocks());
 # endif
   });
 }
