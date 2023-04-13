@@ -458,7 +458,7 @@ public:
   }
   json MetaToJson() const final {
     json js;
-    js["CommonPrefix"] = Slice(commonPrefixData(), commonPrefixLen_).ToString(true);
+    js["CommonPrefix"] = Slice(commonPrefixData(), commonPrefixLen_).hex();
     MetaToJsonCommon(js);
     js["RankSelect.NumBits"] = indexSeq_.size();
     js["RankSelect.MemSize"] = indexSeq_.mem_size();

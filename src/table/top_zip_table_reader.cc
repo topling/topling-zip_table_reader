@@ -2584,7 +2584,7 @@ json ToplingZipTableMultiReader::ToWebViewJson(const json& dump_options) const {
     if (sub.prefix_len_ <= 8 && 0) {
       // TODO:
     } else {
-      strhtml.append(SliceOf(sub.prefix()).ToString(true));
+      strhtml.append(SliceOf(sub.prefix()).hex());
     }
     strhtml.append("</td>");
     double raw_key_size = sub.index_->TotalKeySize();

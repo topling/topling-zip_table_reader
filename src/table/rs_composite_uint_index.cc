@@ -971,7 +971,7 @@ struct CompositeUintIndexBase : public COIndex {
     js["Key2.KeyLen"] = key2_len_;
     js["Key2.KeyMin"] = key2_min_value_;
     js["Key2.KeyMax"] = key2_max_value_;
-    js["CommonPrefix"] = Slice((char*)commonPrefix_.data(), commonPrefix_.size()).ToString(true);
+    js["CommonPrefix"] = Slice((char*)commonPrefix_.data(), commonPrefix_.size()).hex();
   }
 
   ~CompositeUintIndexBase() {

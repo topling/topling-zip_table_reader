@@ -152,7 +152,7 @@ public:
     TERARK_VERIFY(nullptr != m_header);
     json djs;
     djs["CommonPrefixLen"] = m_commonPrefixLen;
-    djs["CommonPrefix"] = Slice(m_commonPrefixData, m_commonPrefixLen).ToString(true); // hex
+    djs["CommonPrefix"] = Slice(m_commonPrefixData, m_commonPrefixLen).hex();
     djs["NumKeys"] = m_keys.m_size;
     djs["FixLen"] = m_keys.m_fixlen;
     djs["MemSize"] = m_header->file_size;
