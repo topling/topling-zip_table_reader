@@ -151,13 +151,6 @@ using namespace tzb_detail;
 static
 std::shared_ptr<TableFactory>
 JS_NewToplingZipTableFactory(const json& js, const SidePluginRepo& repo) {
-  if (&SyncWaitQueueSize == nullptr) {
-    STD_WARN("\nlibrocksdb.so is open source community version\n"
-             "    ToplingZipTableReader is available, but\n"
-             "    ToplingZipTableBuilder is not available\n"
-             "    mailto:contact@topling.cn to get an enterprise version\n"
-             );
-  }
   ToplingZipTableOptions_Json options(js, repo);
   return NewToplingZipTableFactory(options);
 }
