@@ -82,7 +82,7 @@ const uint64_t kToplingZipTableMagicNumber = 0x1122334455667788;
 std::shared_ptr<class TableFactory>
 NewToplingZipTableFactory(const ToplingZipTableOptions& tzto) {
   if (git_version_hash_info_topling_rocks == nullptr) {
-    STD_WARN("\nlibrocksdb.so is open source community version\n"
+    STD_WARN("librocksdb.so is open source community version\n"
              "    ToplingZipTableReader is available, but\n"
              "    ToplingZipTableBuilder is not available\n"
              "    mailto:contact@topling.cn to get an enterprise version\n"
