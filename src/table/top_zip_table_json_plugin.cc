@@ -133,15 +133,6 @@ std::string ToplingZipTableFactory::GetPrintableOptions() const {
   return js.dump(4);
 }
 
-static
-std::shared_ptr<TableFactory>
-JS_NewToplingZipTableFactory(const json& js, const SidePluginRepo& repo) {
-  ToplingZipTableOptions_Json options(js, repo);
-  return NewToplingZipTableFactory(options);
-}
-ROCKSDB_FACTORY_REG("ToplingZipTable", JS_NewToplingZipTableFactory);
-ROCKSDB_RegTableFactoryMagicNumber(kToplingZipTableMagicNumber, "ToplingZipTable");
-
 namespace tzb_detail {
 __attribute((weak)) extern std::mutex g_sumMutex;
 __attribute((weak)) extern size_t g_sumKeyLen;
@@ -156,6 +147,20 @@ __attribute((weak)) extern size_t sumWorkingMem;
 __attribute((weak)) extern size_t& SyncWaitQueueSize();
 }
 using namespace tzb_detail;
+
+static
+std::shared_ptr<TableFactory>
+JS_NewToplingZipTableFactory(const json& js, const SidePluginRepo& repo) {
+  if (&SyncWaitQueueSize == nullptr) {
+    STD_WARN("\nlibrocksdb.so is open source community version\n"
+             "    ToplingZipTableReader is available, but\n"
+             "    ToplingZipTableBuilder is not available\n");
+  }
+  ToplingZipTableOptions_Json options(js, repo);
+  return NewToplingZipTableFactory(options);
+}
+ROCKSDB_FACTORY_REG("ToplingZipTable", JS_NewToplingZipTableFactory);
+ROCKSDB_RegTableFactoryMagicNumber(kToplingZipTableMagicNumber, "ToplingZipTable");
 
 typedef ToplingZipTableFactory::ZipSizeInfo ZipSizeInfo;
 DATA_IO_DUMP_RAW_MEM_E(ZipSizeInfo)
