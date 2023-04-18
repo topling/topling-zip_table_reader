@@ -143,17 +143,17 @@ ROCKSDB_FACTORY_REG("ToplingZipTable", JS_NewToplingZipTableFactory);
 ROCKSDB_RegTableFactoryMagicNumber(kToplingZipTableMagicNumber, "ToplingZipTable");
 
 namespace tzb_detail {
-extern std::mutex g_sumMutex;
-extern size_t g_sumKeyLen;
-extern size_t g_sumValueLen;
-extern size_t g_sumUserKeyLen;
-extern size_t g_sumUserKeyNum;
-extern size_t g_sumEntryNum;
-extern long long g_startupTime;
+__attribute((weak)) extern std::mutex g_sumMutex;
+__attribute((weak)) extern size_t g_sumKeyLen;
+__attribute((weak)) extern size_t g_sumValueLen;
+__attribute((weak)) extern size_t g_sumUserKeyLen;
+__attribute((weak)) extern size_t g_sumUserKeyNum;
+__attribute((weak)) extern size_t g_sumEntryNum;
+__attribute((weak)) extern long long g_startupTime;
 
-extern size_t sumWaitingMem;
-extern size_t sumWorkingMem;
-extern size_t& SyncWaitQueueSize();
+__attribute((weak)) extern size_t sumWaitingMem;
+__attribute((weak)) extern size_t sumWorkingMem;
+__attribute((weak)) extern size_t& SyncWaitQueueSize();
 }
 using namespace tzb_detail;
 
@@ -218,6 +218,7 @@ struct ToplingZipTableFactory_SerDe : SerDeFunc<TableFactory> {
       ToplingZipTableOptionsFromEnv(object->table_options_);
     }
     else {
+      ROCKSDB_VERIFY(&GetZipServerPID != nullptr);
       ToplingZipTableFactoryState inc;
       dio >> inc;
       g_sumMutex.lock();
@@ -238,7 +239,10 @@ ROCKSDB_REG_PluginSerDe("ToplingZipTable", ToplingZipTableFactory_SerDe);
 #define ToStr(...) json(std::string(buf, snprintf(buf, sizeof(buf), __VA_ARGS__)))
 
 json JS_TopZipTable_Global_Stat(bool html) {
-  pid_t zip_server_pid = GetZipServerPID ? GetZipServerPID() : 0;
+  if (&GetZipServerPID == nullptr) {
+    return json{};
+  }
+  pid_t zip_server_pid = GetZipServerPID();
   auto& waitQueueSize = SyncWaitQueueSize();
   if (zip_server_pid > 0) {
     terark::process_obj_read(zip_server_pid,
