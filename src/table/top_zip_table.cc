@@ -146,7 +146,7 @@ createToplingZipTableBuilder(const ToplingZipTableFactory*,
                              const TableBuilderOptions&,
                              WritableFileWriter*);
 namespace tzb_detail {
-__attribute((weak)) extern long long g_startupTime;
+extern long long g_startupTime;
 }
 using namespace tzb_detail;
 

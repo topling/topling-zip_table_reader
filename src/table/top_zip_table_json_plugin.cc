@@ -134,13 +134,13 @@ std::string ToplingZipTableFactory::GetPrintableOptions() const {
 }
 
 namespace tzb_detail {
-__attribute((weak)) extern std::mutex g_sumMutex;
-__attribute((weak)) extern size_t g_sumKeyLen;
-__attribute((weak)) extern size_t g_sumValueLen;
-__attribute((weak)) extern size_t g_sumUserKeyLen;
-__attribute((weak)) extern size_t g_sumUserKeyNum;
-__attribute((weak)) extern size_t g_sumEntryNum;
-__attribute((weak)) extern long long g_startupTime;
+std::mutex g_sumMutex;
+size_t g_sumKeyLen = 0;
+size_t g_sumValueLen = 0;
+size_t g_sumUserKeyLen = 0;
+size_t g_sumUserKeyNum = 0;
+size_t g_sumEntryNum = 0;
+long long g_startupTime = 0;
 
 __attribute((weak)) extern size_t sumWaitingMem;
 __attribute((weak)) extern size_t sumWorkingMem;
@@ -203,6 +203,10 @@ struct ToplingZipTableFactory_SerDe : SerDeFunc<TableFactory> {
       dio << static_cast<const ToplingZipTableFactoryState&>(factory);
     }
     else {
+      if (&GetZipServerPID == nullptr) { // without ToplingZipTableBuilder
+        if (0 == g_startupTime)
+          g_startupTime = g_pf.now();
+      }
       std::unique_lock<std::mutex> lock(factory.mtx_); // need lock
       dio << factory.level_zip_size_;
     }
@@ -225,7 +229,6 @@ struct ToplingZipTableFactory_SerDe : SerDeFunc<TableFactory> {
       ToplingZipTableOptionsFromEnv(object->table_options_);
     }
     else {
-      ROCKSDB_VERIFY(&GetZipServerPID != nullptr);
       ToplingZipTableFactoryState inc;
       dio >> inc;
       g_sumMutex.lock();
@@ -246,8 +249,30 @@ ROCKSDB_REG_PluginSerDe("ToplingZipTable", ToplingZipTableFactory_SerDe);
 #define ToStr(...) json(std::string(buf, snprintf(buf, sizeof(buf), __VA_ARGS__)))
 
 json JS_TopZipTable_Global_Stat(bool html) {
+  char buf[64];
+  long long t8 = g_pf.now();
+  double td = g_pf.uf(g_startupTime, t8);
+  size_t sumlen = g_sumKeyLen + g_sumValueLen;
+
   if (&GetZipServerPID == nullptr) {
-    return json{};
+    if (html)
+      return json::object({
+        { "sumKeyLen", ToStr("%.3f GB", g_sumKeyLen/1e9) },
+        { "sumValueLen", ToStr("%.3f GB", g_sumValueLen/1e9) },
+        { "sumUserKeyLen", ToStr("%.3f GB", g_sumUserKeyLen/1e9) },
+        { "sumUserKeyNum", ToStr("%.6f M", g_sumUserKeyNum/1e6) },
+        { "sumEntryNum", ToStr("%.6f M", g_sumEntryNum/1e6) },
+        { "writeSpeed+seq", ToStr("%.3f MB/s", (sumlen) / td) },
+        { "writeSpeed-seq", ToStr("%.3f MB/s", (sumlen - g_sumEntryNum * 8)/td) },
+      });
+    else
+      return json::object({
+        { "sumKeyLen", g_sumKeyLen },
+        { "sumValueLen", g_sumValueLen },
+        { "sumUserKeyLen", g_sumUserKeyLen },
+        { "sumUserKeyNum", g_sumUserKeyNum },
+        { "sumEntryNum", g_sumEntryNum },
+      });
   }
   pid_t zip_server_pid = GetZipServerPID();
   auto& waitQueueSize = SyncWaitQueueSize();
@@ -257,11 +282,6 @@ json JS_TopZipTable_Global_Stat(bool html) {
         g_sumUserKeyLen, g_sumUserKeyNum, sumWorkingMem, sumWaitingMem,
         g_sumEntryNum, waitQueueSize);
   }
-  char buf[64];
-  long long t8 = g_pf.now();
-  double td = g_pf.uf(g_startupTime, t8);
-  size_t sumlen = g_sumKeyLen + g_sumValueLen;
-
 if (html)
   return json::object({
     { "sumWorkingMem", ToStr("%.3f GB", sumWorkingMem/1e9) },
