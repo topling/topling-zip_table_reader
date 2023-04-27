@@ -461,6 +461,7 @@ public:
   const ToplingZipSubReader* subReader_;
   PinnedIteratorsManager*   pinned_iters_mgr_;
   COIndex::Iterator*        iter_;
+  uint32_t                  min_prefault_pages_;
   SequenceNumber            global_tag_;
   Status                    status_;
   Slice                     user_value_;
@@ -520,12 +521,13 @@ public:
     TERARK_VERIFY_GE(old_live_num, 1);
   }
   ToplingZipTableIterBase(const ToplingZipSubReader* subReader,
-                          const ReadOptions&, SequenceNumber global_seqno)
+                          const ReadOptions& ro, SequenceNumber global_seqno)
     : global_tag_(PackSequenceAndType(global_seqno, kTypeValue))
   {
     subReader_ = subReader;
     iter_ = subReader_->index_->NewIterator();
     iter_->SetInvalid();
+    min_prefault_pages_ = ro.min_prefault_pages;
     tag_rs_kind_ = subReader->tag_rs_kind_;
     pinned_iters_mgr_ = static_cast<PinnedIteratorsManager*>(&dummy_pin_mgr_);
     rs_bitpos_ = -1;
@@ -687,6 +689,7 @@ public:
       TryPinBuffer(value_buf);
       try {
         subReader_->IterGetRecordAppend(valueId, cache_offsets());
+        TryWarmupZeroCopy(value_buf, min_prefault_pages_);
       }
       catch (const std::exception& ex) { // crc checksum error
         if (table_reader_->table_factory_->table_options_.debugLevel > 0) {
@@ -721,6 +724,7 @@ public:
     }
     try {
       subReader_->IterGetRecordAppend(recId, cache_offsets());
+      TryWarmupZeroCopy(value_buf, min_prefault_pages_);
     }
     catch (const std::exception& ex) { // crc checksum error
       if (table_reader_->table_factory_->table_options_.debugLevel > 0) {
@@ -1411,6 +1415,7 @@ const {
           buf.reserve(estimateUnzipCap_);
         }
         GetRecordAppend(valueId, &buf, read_options.async_io);
+        TryWarmupZeroCopy(buf, read_options.min_prefault_pages);
       }
       Slice val((const char*)buf.data(), buf.size());
       if (read_options.pinning_tls || buf.capacity()) {
@@ -1474,6 +1479,7 @@ const {
         get_context->SaveValue(pikey, Slice(), Cleanable());
       } else {
         GetRecordAppend(recId, &buf, read_options.async_io);
+        TryWarmupZeroCopy(buf, read_options.min_prefault_pages);
         auto val = SliceOf(buf);
         PinBuf();
         get_context->SaveValue(pikey, val, pinner);
@@ -1482,6 +1488,7 @@ const {
     break;
   case ZipValueType::kValue: { // should be a kTypeValue, the normal case
     GetRecordAppend(recId, &buf, read_options.async_io);
+    TryWarmupZeroCopy(buf, read_options.min_prefault_pages);
     pikey.sequence = *(uint64_t*)buf.data() & kMaxSequenceNumber;
     pikey.type = kTypeValue;
     if (pikey.sequence <= seqno) {
@@ -1511,6 +1518,7 @@ const {
       GetRecordAppend(recId, &buf, read_options.async_io);
     } else {
       GetRecordAppend(recId, &buf, read_options.async_io);
+      TryWarmupZeroCopy(buf, read_options.min_prefault_pages);
       TERARK_VERIFY(this->zeroCopy_);
       byte_t* buf_copy = (byte_t*)malloc(sizeof(uint32_t) + buf.size());
       memcpy(buf_copy + sizeof(uint32_t), buf.data(), buf.size());
