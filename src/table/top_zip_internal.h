@@ -188,6 +188,7 @@ struct ToplingZipTableFactoryState {
   mutable size_t gdict_zip_size = 0;
   mutable size_t sum_part_num = 0;
   struct ZipSizeInfo {
+    ZipSizeInfo() {}
     uint64_t raw_size = 0;
     uint64_t zip_size = 0;
     void add(const ZipSizeInfo& x) {
