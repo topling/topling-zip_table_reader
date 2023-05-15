@@ -304,10 +304,11 @@ else
 }
 
 json JS_TopZipTable_Global_Env() {
-  extern int GetNltBuildThreads();
+  extern __attribute__((weak)) int GetNltBuildThreads();
+  int nltBuildThreads = GetNltBuildThreads ? GetNltBuildThreads() : 0;
   return json::object({
     {"DictZipBlobStore_zipThreads", terark::DictZipBlobStore_getZipThreads()},
-    {"ToplingZipTable_nltBuildThreads", GetNltBuildThreads()},
+    {"ToplingZipTable_nltBuildThreads", nltBuildThreads},
   });
 }
 
