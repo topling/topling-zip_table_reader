@@ -405,8 +405,8 @@ public:
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
              const SliceTransform*, bool skip_filters) override;
 
-  uint64_t ApproximateOffsetOf(const Slice&, TableReaderCaller) override;
-  uint64_t ApproximateSize(const Slice&, const Slice&, TableReaderCaller) override;
+  uint64_t ApproximateOffsetOf(ROCKSDB_8_X_COMMA(const ReadOptions& readopt) const Slice&, TableReaderCaller) override;
+  uint64_t ApproximateSize(ROCKSDB_8_X_COMMA(const ReadOptions& readopt) const Slice&, const Slice&, TableReaderCaller) override;
   Status ApproximateKeyAnchors(const ReadOptions&, std::vector<Anchor>&) override;
 
   ~ToplingZipTableReader() override;
@@ -432,8 +432,8 @@ public:
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
              const SliceTransform*, bool skip_filters) override;
 
-  uint64_t ApproximateOffsetOf(const Slice&, TableReaderCaller) override;
-  uint64_t ApproximateSize(const Slice&, const Slice&, TableReaderCaller) override;
+  uint64_t ApproximateOffsetOf(ROCKSDB_8_X_COMMA(const ReadOptions& readopt) const Slice&, TableReaderCaller) override;
+  uint64_t ApproximateSize(ROCKSDB_8_X_COMMA(const ReadOptions& readopt) const Slice&, const Slice&, TableReaderCaller) override;
   Status ApproximateKeyAnchors(const ReadOptions&, std::vector<Anchor>&) override;
 
   ~ToplingZipTableMultiReader() override;
@@ -1949,7 +1949,9 @@ ToplingZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 }
 
 
-uint64_t ToplingZipTableReader::ApproximateOffsetOf(const Slice& ikey, TableReaderCaller) {
+uint64_t ToplingZipTableReader::ApproximateOffsetOf(
+      ROCKSDB_8_X_COMMA(const ReadOptions& readopt)
+      const Slice& ikey, TableReaderCaller) {
   size_t numRecords = subReader_.index_->NumKeys();
   size_t rank = subReader_.ApproximateRank(ExtractUserKey(ikey));
   TERARK_VERIFY_LE(rank, numRecords);
@@ -1959,7 +1961,8 @@ uint64_t ToplingZipTableReader::ApproximateOffsetOf(const Slice& ikey, TableRead
 }
 
 uint64_t
-ToplingZipTableReader::ApproximateSize(const Slice& start,
+ToplingZipTableReader::ApproximateSize(ROCKSDB_8_X_COMMA(const ReadOptions& readopt)
+                                      const Slice& start,
                                       const Slice& end,
                                       TableReaderCaller caller) {
   size_t rankBeg = subReader_.ApproximateRank(ExtractUserKey(start));
@@ -2334,7 +2337,9 @@ ToplingZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCon
   }
 }
 
-uint64_t ToplingZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey, TableReaderCaller) {
+uint64_t ToplingZipTableMultiReader::ApproximateOffsetOf(
+      ROCKSDB_8_X_COMMA(const ReadOptions& readopt)
+      const Slice& ikey, TableReaderCaller) {
   fstring key = ExtractUserKey(ikey);
   const ToplingZipSubReader* subReader = LowerBoundSubReader(key);
   size_t numRecords;
@@ -2364,11 +2369,12 @@ uint64_t ToplingZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey, Tabl
 }
 
 uint64_t
-ToplingZipTableMultiReader::ApproximateSize(const Slice& start,
+ToplingZipTableMultiReader::ApproximateSize(ROCKSDB_8_X_COMMA(const ReadOptions& readopt)
+                                           const Slice& start,
                                            const Slice& end,
                                            TableReaderCaller caller) {
-  auto off0 = ApproximateOffsetOf(start, caller);
-  auto off1 = ApproximateOffsetOf(end, caller);
+  auto off0 = ApproximateOffsetOf(ROCKSDB_8_X_COMMA(readopt)start, caller);
+  auto off1 = ApproximateOffsetOf(ROCKSDB_8_X_COMMA(readopt)end, caller);
   return off1 - off0;
 }
 
