@@ -767,6 +767,18 @@ public:
     }
     return true;
   }
+  bool PrepareAndGetValue(Slice* v) final {
+    if (!is_value_loaded_) {
+      if (!FetchValue()) return false;
+    }
+    if (UNLIKELY(LegacyZvType == tag_rs_kind_)) {
+      LegacyDecodeCurrTagAndValue();
+    } else {
+      // all works were done in FetchValue
+    }
+    *v = user_value_;
+    return true;
+  }
   terark_flatten void DecodeCurrKeyTag() {
     TERARK_ASSERT_S(status_.ok(), "%s", status_.ToString());
     TERARK_ASSERT_LT(iter_->id(), subReader_->index_->NumKeys());
