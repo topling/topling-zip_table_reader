@@ -757,8 +757,8 @@ public:
     return true;
   }
   bool PrepareValue() final {
-    if (!is_value_loaded_) {
-      if (!FetchValue()) return false;
+    if (LIKELY(!is_value_loaded_)) {
+      if (UNLIKELY(!FetchValue())) return false;
     }
     if (UNLIKELY(LegacyZvType == tag_rs_kind_)) {
       LegacyDecodeCurrTagAndValue();
@@ -768,8 +768,8 @@ public:
     return true;
   }
   bool PrepareAndGetValue(Slice* v) final {
-    if (!is_value_loaded_) {
-      if (!FetchValue()) return false;
+    if (LIKELY(!is_value_loaded_)) {
+      if (UNLIKELY(!FetchValue())) return false;
     }
     if (UNLIKELY(LegacyZvType == tag_rs_kind_)) {
       LegacyDecodeCurrTagAndValue();
