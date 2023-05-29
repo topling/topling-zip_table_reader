@@ -616,7 +616,7 @@ public:
 
   bool NextAndGetResult(IterateResult* result) noexcept final {
     this->Next();
-    if (this->value_count_) { // this->Valid()
+    if (LIKELY(0 != this->value_count_)) { // this->Valid()
       result->SetKey(this->key());
       result->bound_check_result = IterBoundCheck::kUnknown;
       if constexpr (is_legacy_zv) {
@@ -625,8 +625,10 @@ public:
         assert(!this->is_value_loaded_);
         result->value_prepared = false;
       }
+      result->is_valid = true;
       return true;
     }
+    result->is_valid = false;
     return false;
   }
 
