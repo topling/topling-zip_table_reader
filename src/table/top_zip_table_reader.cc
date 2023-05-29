@@ -381,6 +381,7 @@ public:
                   TableMultiPartInfo&, const TableReaderOptions&,
                   const AbstractBlobStore::Dictionary&);
 
+  using TopTableReaderBase::isReverseBytewiseOrder_; // make public
   Slice  dict_; // unzipped
   size_t dict_zip_size_;
   const ToplingZipTableFactory* table_factory_;
@@ -399,7 +400,7 @@ public:
               size_t compaction_readahead_size,
               bool allow_unprepared_value) override;
 
-  template<bool reverse, bool ZipOffset>
+  template<bool reverse, bool ZipOffset, class IterOpt>
   InternalIterator* NewIteratorImp(const ReadOptions&, Arena*);
 
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
@@ -426,7 +427,7 @@ public:
               size_t compaction_readahead_size,
               bool allow_unprepared_value) override;
 
-  template<bool reverse, bool ZipOffset>
+  template<bool reverse, bool ZipOffset, class IterOpt>
   InternalIterator* NewIteratorImp(const ReadOptions&, Arena*);
 
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
@@ -451,12 +452,23 @@ public:
   const ToplingZipSubReader* LastSubReader() const { return &subReader_.back(); }
   const ToplingZipSubReader* LowerBoundSubReader(fstring key) const;
   bool HasAnyZipOffset() const { return hasAnyZipOffset_; }
+  bool IterIsLegacyZV() const;
   json ToWebViewJson(const json& dump_options) const;
   std::string ToWebViewString(const json& dump_options) const override;
 };
 
-class ToplingZipTableIterBase : public InternalIterator {
+struct IterOptLegacyZV : public InternalIterator {
+  Slice  user_value_;
+  static constexpr bool is_legacy_zv = true;
+};
+struct IterOptTagRS : public InternalIterator {
+  static constexpr bool is_legacy_zv = false;
+};
+template<class IterOpt>
+class ToplingZipTableIterBase : public IterOpt {
 public:
+  using IterBase = ToplingZipTableIterBase;
+  using IterOpt::is_legacy_zv;
   const TooZipTableReaderBase* table_reader_;
   const ToplingZipSubReader* subReader_;
   PinnedIteratorsManager*   pinned_iters_mgr_;
@@ -464,7 +476,6 @@ public:
   uint32_t                  min_prefault_pages_;
   SequenceNumber            global_tag_;
   Status                    status_;
-  Slice                     user_value_;
   uint32_t                  value_count_;
   uint32_t                  value_index_;
   size_t                    seek_cnt_ = 0;
@@ -596,15 +607,24 @@ public:
       ROCKSDB_VERIFY(const_cast<ToplingZipTableIterBase*>(this)->PrepareValue());
     }
   #endif
-    return user_value_;
+    if constexpr (is_legacy_zv) {
+      return this->user_value_;
+    } else {
+      return SliceOf(ValueBuf());
+    }
   }
 
   bool NextAndGetResult(IterateResult* result) noexcept final {
-    Next();
+    this->Next();
     if (this->value_count_) { // this->Valid()
       result->SetKey(this->key());
       result->bound_check_result = IterBoundCheck::kUnknown;
-      result->value_prepared = this->is_value_loaded_;
+      if constexpr (is_legacy_zv) {
+        result->value_prepared = this->is_value_loaded_;
+      } else {
+        assert(!this->is_value_loaded_);
+        result->value_prepared = false;
+      }
       return true;
     }
     return false;
@@ -645,6 +665,7 @@ public:
       value_index_ = 0;
       switch (tag_rs_kind_) {
       case LegacyZvType:
+       if constexpr (is_legacy_zv) {
         is_value_loaded_ = false;
         zip_value_type_ = r.type_.size()
           ? ZipValueType(r.type_[recId])
@@ -656,6 +677,9 @@ public:
         } else { // must fetch values because seqnum is stored in value
           return FetchValueZV();
         }
+       } else {
+        ROCKSDB_DIE("tag_rs_kind_ must not be LegacyZvType");
+       }
       case RS_Key0_TagN:
       case RS_Key0_Tag0:
       case RS_Key0_Tag1:
@@ -679,20 +703,29 @@ public:
     }
   }
   bool FetchValue() {
-    if (LegacyZvType == tag_rs_kind_) {
-      return FetchValueZV();
+    if constexpr (is_legacy_zv) {
+      if (LegacyZvType == tag_rs_kind_) {
+        return FetchValueZV();
+      } else {
+        return FetchValueRS();
+      }
     } else {
+      ROCKSDB_ASSERT_NE(LegacyZvType, tag_rs_kind_);
       return FetchValueRS();
     }
   }
   inline bool FetchValueRS() {
     assert(!is_value_loaded_);
     auto op = ValueType(iter_->key().end()[0]); // ValueType byte
+    auto& value_buf = ValueBuf();
     if (kTypeDeletion == op || kTypeSingleDeletion == op) {
-      user_value_ = "";
+      if constexpr (is_legacy_zv) {
+        this->user_value_ = "";
+      } else {
+        value_buf.risk_set_size(0);
+      }
     } else {
       size_t valueId = rs_bitpos_ + value_index_;
-      auto& value_buf = ValueBuf();
       TryPinBuffer(value_buf);
       try {
         subReader_->IterGetRecordAppend(valueId, cache_offsets());
@@ -706,7 +739,9 @@ public:
         status_ = Status::Corruption("IterGetRecordAppend()", ex.what());
         return false;
       }
-      user_value_ = SliceOf(value_buf);
+      if constexpr (is_legacy_zv) {
+        this->user_value_ = SliceOf(value_buf);
+      }
     }
     is_value_loaded_ = true;
     return true;
@@ -767,10 +802,12 @@ public:
     if (LIKELY(!is_value_loaded_)) {
       if (UNLIKELY(!FetchValue())) return false;
     }
-    if (UNLIKELY(LegacyZvType == tag_rs_kind_)) {
-      LegacyDecodeCurrTagAndValue();
-    } else {
-      // all works were done in FetchValue
+    if constexpr (is_legacy_zv) {
+      if (UNLIKELY(LegacyZvType == tag_rs_kind_)) {
+        LegacyDecodeCurrTagAndValue();
+      } else {
+        // all works were done in FetchValue
+      }
     }
     return true;
   }
@@ -778,12 +815,16 @@ public:
     if (LIKELY(!is_value_loaded_)) {
       if (UNLIKELY(!FetchValue())) return false;
     }
-    if (UNLIKELY(LegacyZvType == tag_rs_kind_)) {
-      LegacyDecodeCurrTagAndValue();
+    if constexpr (is_legacy_zv) {
+      if (UNLIKELY(LegacyZvType == tag_rs_kind_)) {
+        LegacyDecodeCurrTagAndValue();
+      } else {
+        // all works were done in FetchValue
+      }
+      *v = this->user_value_;
     } else {
-      // all works were done in FetchValue
+      *v = SliceOf(ValueBuf());
     }
-    *v = user_value_;
     return true;
   }
   terark_flatten void DecodeCurrKeyTag() {
@@ -818,6 +859,9 @@ public:
     EncodeFixed64((char*)iter_->key().end(), key_tag); // use extra 8 bytes
   }
   void DecodeCurrKeyTagZV() {
+    if constexpr (!is_legacy_zv) {
+      return;
+    }
     if (ZipValueType::kZeroSeq == zip_value_type_) {
       TERARK_ASSERT_EQ(0, value_index_);
       TERARK_ASSERT_EQ(1, value_count_);
@@ -829,6 +873,7 @@ public:
     }
   }
   void LegacyDecodeCurrTagAndValue() {
+   if constexpr (is_legacy_zv) {
     assert(is_value_loaded_);
     assert(status_.ok());
     assert(iter_->id() < subReader_->index_->NumKeys());
@@ -842,7 +887,7 @@ public:
       assert(0 == value_index_);
       assert(1 == value_count_);
       key_tag_ = global_tag_;
-      user_value_ = SliceOf(value_buf);
+      this->user_value_ = SliceOf(value_buf);
       break;
     case ZipValueType::kValue: // should be a kTypeValue, the normal case
       assert(0 == value_index_);
@@ -850,7 +895,7 @@ public:
       // little endian uint64_t
       key_tag_ = PackSequenceAndType(*(uint64_t*)value_buf.data() & kMaxSequenceNumber,
                                      kTypeValue);
-      user_value_ = SubSlice(value_buf, 7);
+      this->user_value_ = SubSlice(value_buf, 7);
       break;
     case ZipValueType::kDelete:
       assert(0 == value_index_);
@@ -858,7 +903,7 @@ public:
       // little endian uint64_t
       key_tag_ = PackSequenceAndType(*(uint64_t*)value_buf.data() & kMaxSequenceNumber,
                                      kTypeDeletion);
-      user_value_ = SubSlice(value_buf, 7);
+      this->user_value_ = SubSlice(value_buf, 7);
       break;
     case ZipValueType::kMulti: { // more than one value
       auto zmValue = (const ZipValueMultiValue*)value_buf.data();
@@ -870,11 +915,12 @@ public:
       TERARK_ASSERT_GE(d.size(), sizeof(SequenceNumber));
       key_tag_ = unaligned_load<SequenceNumber>(d.data());
       d.remove_prefix(sizeof(SequenceNumber));
-      user_value_ = d;
+      this->user_value_ = d;
       break; }
     }
     // COIndex::Iterator::key() has 8+ bytes extra space for KeyTag
     EncodeFixed64((char*)iter_->key().end(), key_tag_); // use extra bytes
+   }
   }
 
   bool PointGet(const Slice& ikey, bool fetch_val) override {
@@ -885,7 +931,9 @@ public:
       auto& buf = ValueBuf(); // reuse value buf
       buf.risk_set_size(0);
       if (sub->PointGet(ikey, &buf)) {
-        user_value_ = SliceOf(buf);
+        if constexpr (is_legacy_zv) {
+          this->user_value_ = SliceOf(buf);
+        }
         is_value_loaded_ = true;
         return true;
       } else {
@@ -901,10 +949,19 @@ public:
   virtual void SeekInternal(const ParsedInternalKey& pikey) = 0;
 };
 
-template<bool reverse>
-class ToplingZipTableIterator : public ToplingZipTableIterBase {
+template<bool reverse, class IterOpt>
+class ToplingZipTableIterator : public ToplingZipTableIterBase<IterOpt> {
 public:
-  using ToplingZipTableIterBase::ToplingZipTableIterBase;
+  using super = ToplingZipTableIterBase<IterOpt>;
+  using super::super;
+  using super::is_legacy_zv;
+  using super::Next;
+  using super::SeekForPrevImpl;
+  using super::DecodeCurrKeyTag;
+  using super::UnzipIterRecord;
+  using super::iter_;
+  using super::value_index_;
+  using super::value_count_;
 
   void SeekForPrevAux(const Slice& target, const InternalKeyComparator& c) {
     SeekForPrevImpl(target, &c);
@@ -992,19 +1049,19 @@ protected:
   }
 };
 
-template<bool reverse>
-class ToplingZipTableMultiIterator : public ToplingZipTableIterator<reverse> {
+template<bool reverse, class IterOpt>
+class ToplingZipTableMultiIterator : public ToplingZipTableIterator<reverse, IterOpt> {
 public:
   ToplingZipTableMultiIterator(ToplingZipTableMultiReader& table,
                                const ReadOptions& ro, SequenceNumber global_seqno)
-    : ToplingZipTableIterator<reverse>
+    : ToplingZipTableIterator<reverse, IterOpt>
       (&table.subReader_[0], &table, ro, global_seqno)
   {}
 protected:
   const ToplingZipTableMultiReader* reader() const {
     return static_cast<const ToplingZipTableMultiReader*>(this->table_reader_);
   }
-  typedef ToplingZipTableIterator<reverse> base_t;
+  typedef ToplingZipTableIterator<reverse, IterOpt> base_t;
   using base_t::invalidate_offsets_cache;
   using base_t::iter_;
   using base_t::subReader_;
@@ -1192,7 +1249,7 @@ public:
   using super = BaseIterZO<Base>;
   using super::super;
   void invalidate_offsets_cache() noexcept override {
-    static_assert(offsetof(IterZO, rb_) == sizeof(ToplingZipTableIterBase));
+    static_assert(offsetof(IterZO, rb_) == sizeof(typename Base::IterBase));
     rb_.invalidate_offsets_cache();
   }
 };
@@ -1912,6 +1969,27 @@ void ToplingZipTableReader::SetupForRandomRead() {
   }
 }
 
+template<class Reader>
+static InternalIterator*
+NewIter(Reader* r, const ReadOptions& ro, Arena* arena,
+        bool ZipOffset, bool IsLegacyZV) {
+  const bool reverse = !!r->isReverseBytewiseOrder_;
+#define ForTemplateArg(a, b) \
+  do { \
+    if (a == reverse && b == ZipOffset) { \
+      if (IsLegacyZV) \
+        return r->template NewIteratorImp<a,b,IterOptLegacyZV>(ro, arena); \
+      else \
+        return r->template NewIteratorImp<a,b,IterOptTagRS>(ro, arena); \
+    } \
+  } while (0)
+  ForTemplateArg(0,0);
+  ForTemplateArg(0,1);
+  ForTemplateArg(1,0);
+  ForTemplateArg(1,1);
+  TERARK_DIE("Unexpected");
+}
+
 InternalIterator*
 ToplingZipTableReader::
 NewIterator(const ReadOptions& ro, const SliceTransform* prefix_extractor,
@@ -1920,20 +1998,14 @@ NewIterator(const ReadOptions& ro, const SliceTransform* prefix_extractor,
             bool allow_unprepared_value) {
   TERARK_UNUSED_VAR(skip_filters); // unused
   const bool ZipOffset = !!subReader_.store_->is_offsets_zipped();
-#define ForTemplateArg(a, b) \
-  if (a == !!isReverseBytewiseOrder_ && b == ZipOffset) \
-    return NewIteratorImp<a,b>(ro, arena)
-  ForTemplateArg(0,0);
-  ForTemplateArg(0,1);
-  ForTemplateArg(1,0);
-  ForTemplateArg(1,1);
-  TERARK_DIE("Unexpected");
+  const bool IsLegacyZV = LegacyZvType == subReader_.tag_rs_kind_;
+  return NewIter(this, ro, arena, ZipOffset, IsLegacyZV);
 }
 
-template<bool reverse, bool ZipOffset>
+template<bool reverse, bool ZipOffset, class IterOpt>
 InternalIterator*
 ToplingZipTableReader::NewIteratorImp(const ReadOptions& ro, Arena* a) {
-  typedef IterZO<ToplingZipTableIterator<reverse>, ZipOffset> IterType;
+  typedef IterZO<ToplingZipTableIterator<reverse, IterOpt>, ZipOffset> IterType;
   if (a) {
     return new(a->AllocateAligned(sizeof(IterType)))
                IterType(&subReader_, this, ro, global_seqno_);
@@ -2261,6 +2333,14 @@ void ToplingZipTableMultiReader::Init(TableMultiPartInfo& offsetInfo, const Tabl
   }
 }
 
+bool ToplingZipTableMultiReader::IterIsLegacyZV() const {
+  for (auto& sub : subReader_) {
+    if (LegacyZvType != sub.tag_rs_kind_)
+      return false;
+  }
+  return true;
+}
+
 const ToplingZipSubReader*
 ToplingZipTableMultiReader::LowerBoundSubReader(fstring key) const {
   if (isReverseBytewiseOrder_) {
@@ -2294,18 +2374,13 @@ NewIterator(const ReadOptions& ro, const SliceTransform* prefix_extractor,
             size_t compaction_readahead_size,
             bool allow_unprepared_value) {
   TERARK_UNUSED_VAR(skip_filters); // unused
-  const bool ZipOffset = this->HasAnyZipOffset();
-  ForTemplateArg(0,0);
-  ForTemplateArg(0,1);
-  ForTemplateArg(1,0);
-  ForTemplateArg(1,1);
-  TERARK_DIE("Unexpected");
+  return NewIter(this, ro, arena, HasAnyZipOffset(), IterIsLegacyZV());
 }
 
-template<bool reverse, bool ZipOffset>
+template<bool reverse, bool ZipOffset, class IterOpt>
 InternalIterator*
 ToplingZipTableMultiReader::NewIteratorImp(const ReadOptions& ro, Arena* a) {
-  typedef IterZO<ToplingZipTableMultiIterator<reverse>, ZipOffset> IterType;
+  typedef IterZO<ToplingZipTableMultiIterator<reverse, IterOpt>, ZipOffset> IterType;
   if (a) {
     return new(a->AllocateAligned(sizeof(IterType)))
                IterType(*this, ro, global_seqno_);
