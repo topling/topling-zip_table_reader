@@ -400,7 +400,7 @@ public:
               bool allow_unprepared_value) override;
 
   template<bool reverse, bool ZipOffset>
-  class ToplingZipTableIterBase* NewIteratorImp(const ReadOptions&, Arena*);
+  InternalIterator* NewIteratorImp(const ReadOptions&, Arena*);
 
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
              const SliceTransform*, bool skip_filters) override;
@@ -427,7 +427,7 @@ public:
               bool allow_unprepared_value) override;
 
   template<bool reverse, bool ZipOffset>
-  class ToplingZipTableIterBase* NewIteratorImp(const ReadOptions&, Arena*);
+  InternalIterator* NewIteratorImp(const ReadOptions&, Arena*);
 
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
              const SliceTransform*, bool skip_filters) override;
@@ -457,7 +457,7 @@ public:
 
 class ToplingZipTableIterBase : public InternalIterator {
 public:
-  const TooZipTableReaderBase* table_reader_ = nullptr;
+  const TooZipTableReaderBase* table_reader_;
   const ToplingZipSubReader* subReader_;
   PinnedIteratorsManager*   pinned_iters_mgr_;
   COIndex::Iterator*        iter_;
@@ -521,9 +521,11 @@ public:
     TERARK_VERIFY_GE(old_live_num, 1);
   }
   ToplingZipTableIterBase(const ToplingZipSubReader* subReader,
+                          TooZipTableReaderBase* r,
                           const ReadOptions& ro, SequenceNumber global_seqno)
     : global_tag_(PackSequenceAndType(global_seqno, kTypeValue))
   {
+    table_reader_ = r;
     subReader_ = subReader;
     iter_ = subReader_->index_->NewIterator();
     iter_->SetInvalid();
@@ -534,6 +536,11 @@ public:
 //  zip_value_type_ = ZipValueType(255); // NOLINT
     value_index_ = 0;
     value_count_ = 0;
+    inc_seqscan(r);
+    auto* f = r->table_factory_;
+    as_atomic(r->live_iter_num_).fetch_add(1, std::memory_order_relaxed);
+    as_atomic(f->cumu_iter_num).fetch_add(1, std::memory_order_relaxed);
+    as_atomic(f->live_iter_num).fetch_add(1, std::memory_order_relaxed);
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) final {
@@ -988,9 +995,10 @@ protected:
 template<bool reverse>
 class ToplingZipTableMultiIterator : public ToplingZipTableIterator<reverse> {
 public:
-  ToplingZipTableMultiIterator(const ToplingZipTableMultiReader& subIndex,
+  ToplingZipTableMultiIterator(ToplingZipTableMultiReader& table,
                                const ReadOptions& ro, SequenceNumber global_seqno)
-    : ToplingZipTableIterator<reverse>(&subIndex.subReader_[0], ro, global_seqno)
+    : ToplingZipTableIterator<reverse>
+      (&table.subReader_[0], &table, ro, global_seqno)
   {}
 protected:
   const ToplingZipTableMultiReader* reader() const {
@@ -1911,35 +1919,26 @@ NewIterator(const ReadOptions& ro, const SliceTransform* prefix_extractor,
             size_t compaction_readahead_size,
             bool allow_unprepared_value) {
   TERARK_UNUSED_VAR(skip_filters); // unused
-  as_atomic(live_iter_num_).fetch_add(1, std::memory_order_relaxed);
   const bool ZipOffset = !!subReader_.store_->is_offsets_zipped();
 #define ForTemplateArg(a, b) \
   if (a == !!isReverseBytewiseOrder_ && b == ZipOffset) \
     return NewIteratorImp<a,b>(ro, arena)
-  auto new_iter = [&]() -> ToplingZipTableIterBase* {
-    ForTemplateArg(0,0);
-    ForTemplateArg(0,1);
-    ForTemplateArg(1,0);
-    ForTemplateArg(1,1);
-    TERARK_DIE("Unexpected");
-  };
-  auto iter = new_iter();
-  iter->table_reader_ = this;
-  iter->inc_seqscan(this);
-  as_atomic(table_factory_->cumu_iter_num).fetch_add(1, std::memory_order_relaxed);
-  as_atomic(table_factory_->live_iter_num).fetch_add(1, std::memory_order_relaxed);
-  return iter;
+  ForTemplateArg(0,0);
+  ForTemplateArg(0,1);
+  ForTemplateArg(1,0);
+  ForTemplateArg(1,1);
+  TERARK_DIE("Unexpected");
 }
 
 template<bool reverse, bool ZipOffset>
-ToplingZipTableIterBase*
+InternalIterator*
 ToplingZipTableReader::NewIteratorImp(const ReadOptions& ro, Arena* a) {
   typedef IterZO<ToplingZipTableIterator<reverse>, ZipOffset> IterType;
   if (a) {
     return new(a->AllocateAligned(sizeof(IterType)))
-               IterType(&subReader_, ro, global_seqno_);
+               IterType(&subReader_, this, ro, global_seqno_);
   } else {
-    return new IterType(&subReader_, ro, global_seqno_);
+    return new IterType(&subReader_, this, ro, global_seqno_);
   }
 }
 
@@ -1959,7 +1958,6 @@ ToplingZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
     return subReader_.Get(ro, global_seqno_, ikey, get_context);
   }
 }
-
 
 uint64_t ToplingZipTableReader::ApproximateOffsetOf(
       ROCKSDB_8_X_COMMA(const ReadOptions& readopt)
@@ -2297,24 +2295,15 @@ NewIterator(const ReadOptions& ro, const SliceTransform* prefix_extractor,
             bool allow_unprepared_value) {
   TERARK_UNUSED_VAR(skip_filters); // unused
   const bool ZipOffset = this->HasAnyZipOffset();
-  as_atomic(live_iter_num_).fetch_add(1, std::memory_order_relaxed);
-  auto new_iter = [&]() -> ToplingZipTableIterBase* {
-    ForTemplateArg(0,0);
-    ForTemplateArg(0,1);
-    ForTemplateArg(1,0);
-    ForTemplateArg(1,1);
-    TERARK_DIE("Unexpected");
-  };
-  auto iter = new_iter();
-  iter->table_reader_ = this;
-  iter->inc_seqscan(this);
-  as_atomic(table_factory_->cumu_iter_num).fetch_add(1, std::memory_order_relaxed);
-  as_atomic(table_factory_->live_iter_num).fetch_add(1, std::memory_order_relaxed);
-  return iter;
+  ForTemplateArg(0,0);
+  ForTemplateArg(0,1);
+  ForTemplateArg(1,0);
+  ForTemplateArg(1,1);
+  TERARK_DIE("Unexpected");
 }
 
 template<bool reverse, bool ZipOffset>
-ToplingZipTableIterBase*
+InternalIterator*
 ToplingZipTableMultiReader::NewIteratorImp(const ReadOptions& ro, Arena* a) {
   typedef IterZO<ToplingZipTableMultiIterator<reverse>, ZipOffset> IterType;
   if (a) {
