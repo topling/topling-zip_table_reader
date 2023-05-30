@@ -46,6 +46,13 @@
 #include <linux/mman.h>
 #endif
 
+//#define TOP_ZIP_TABLE_KEEP_EXCEPTION
+#if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
+  #define IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(Then, Else) Then
+#else
+  #define IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(Then, Else) Else
+#endif
+
 namespace rocksdb {
 
 using namespace terark;
@@ -729,6 +736,10 @@ public:
     } else {
       size_t valueId = rs_bitpos_ + value_index_;
       TryPinBuffer(value_buf);
+     #if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
+      subReader_->IterGetRecordAppend(valueId, cache_offsets());
+      TryWarmupZeroCopy(value_buf, min_prefault_pages_);
+     #else
       try {
         subReader_->IterGetRecordAppend(valueId, cache_offsets());
         TryWarmupZeroCopy(value_buf, min_prefault_pages_);
@@ -741,6 +752,7 @@ public:
         status_ = Status::Corruption("IterGetRecordAppend()", ex.what());
         return false;
       }
+     #endif
       if constexpr (is_legacy_zv) {
         this->user_value_ = SliceOf(value_buf);
       }
@@ -766,6 +778,10 @@ public:
       value_buf.ensure_capacity(subReader_->estimateUnzipCap_ + mulnum_size);
       value_buf.resize_no_init(mulnum_size);
     }
+   #if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
+    subReader_->IterGetRecordAppend(recId, cache_offsets());
+    TryWarmupZeroCopy(value_buf, min_prefault_pages_);
+   #else
     try {
       subReader_->IterGetRecordAppend(recId, cache_offsets());
       TryWarmupZeroCopy(value_buf, min_prefault_pages_);
@@ -778,6 +794,7 @@ public:
       status_ = Status::Corruption("IterGetRecordAppend()", ex.what());
       return false;
     }
+   #endif
     if (ZipValueType::kMulti == zip_value_type_) {
       if (value_buf.capacity() == 0) {
         TERARK_VERIFY(subReader_->zeroCopy_);
@@ -2021,7 +2038,7 @@ ToplingZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
                           GetContext* get_context, const SliceTransform* prefix_extractor,
                           bool skip_filters) {
   TERARK_ASSERT_GE(ikey.size(), 8);
-  if (LIKELY(0 == subReader_.debugLevel_)) {
+  if (IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(0, LIKELY(0 == debugLevel_))) {
     try {
       return subReader_.Get(ro, global_seqno_, ikey, get_context);
     } catch (const std::exception& ex) {
@@ -2403,7 +2420,7 @@ ToplingZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCon
   if (UNLIKELY(!subReader)) { // memcmp prefix fail is very unlikely, skip it
     return Status::OK();
   }
-  if (LIKELY(0 == debugLevel_)) {
+  if (IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(0, LIKELY(0 == debugLevel_))) {
     try {
       return subReader->Get(ro, global_seqno_, ikey, get_context);
     } catch (const std::exception& ex) {
