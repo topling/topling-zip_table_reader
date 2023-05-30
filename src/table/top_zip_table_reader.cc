@@ -608,10 +608,25 @@ public:
   #if 0
     assert(is_value_loaded_);
   #else
-    // rocksdb bug, it says PrepareValue() must be called before calling value(),
-    // but it violate this contract.
+    // NewIterator() has param `allow_unprepared_value`, which is used for
+    // decide whether call PrepareValue() in Next(), thus can check status
+    // when Valid() returns false.
+    //
+    // 1. `allow_unprepared_value` is true  in DBIter
+    // 2. `allow_unprepared_value` is false in Flush and Compaction
+    //
+    // The `allow_unprepared_value` increases non-essential complexity,
+    // So we ignore `allow_unprepared_value` and handle lazy load here:
+    //
+    // 1. In DBIter, this lazy load will not be triggered
+    // 2. In Flush and Compaction, this lazy load will be triggered, when
+    //    PrepareValue() failed, it is a fatal error and data is not
+    //    recoverable in most cases, we just die in such cases.
+    //
     if (UNLIKELY(!is_value_loaded_)) {
-      ROCKSDB_VERIFY(const_cast<ToplingZipTableIterBase*>(this)->PrepareValue());
+      if (UNLIKELY(!const_cast<IterBase*>(this)->PrepareValue())) {
+        TERARK_DIE_S("PrepareValue = %s", status_.ToString());
+      }
     }
   #endif
     if constexpr (is_legacy_zv) {
