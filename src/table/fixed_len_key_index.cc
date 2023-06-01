@@ -247,8 +247,58 @@ public:
   }
   size_t DictRank() const override { return m_id; }
 };
+template<int SuffixLen>
+class FixedLenKeyIndexIterTmpl : public FixedLenKeyIndex::Iter {
+public:
+  using Iter::Iter;
+  inline bool DoneConstLen(size_t id) {
+    auto key = m_index->m_keys.data() + SuffixLen * id;
+    memcpy(m_key_data + m_pref_len, key, SuffixLen);
+    return true;
+  }
+  bool Next() override {
+    if (++m_id < m_num)
+      return DoneConstLen(m_id);
+    else
+      return Fail();
+  }
+  bool Prev() override {
+    if (m_id > 0)
+      return DoneConstLen(--m_id);
+    else
+      return Fail();
+  }
+};
 COIndex::Iterator* FixedLenKeyIndex::NewIterator() const {
   void* mem = malloc(sizeof(Iter) + m_commonPrefixLen + m_keys.m_fixlen + 16);
+  switch (m_keys.m_fixlen) {
+#define case_of(SuffixLen) \
+  case SuffixLen: return new(mem)FixedLenKeyIndexIterTmpl<SuffixLen>(this)
+  case_of( 1);
+  case_of( 2);
+  case_of( 3);
+  case_of( 4);
+  case_of( 5);
+  case_of( 6);
+  case_of( 7);
+  case_of( 8);
+  case_of( 9);
+  case_of(10);
+  case_of(11);
+  case_of(12);
+  case_of(13);
+  case_of(14);
+  case_of(15);
+  case_of(16);
+  case_of(20);
+  case_of(24);
+  case_of(32);
+  case_of(40);
+  case_of(48);
+  case_of(56);
+  case_of(64);
+  default: break; // fallback
+  }
   return new(mem)Iter(this);
 }
 
