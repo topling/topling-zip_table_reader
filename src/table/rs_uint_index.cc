@@ -267,6 +267,22 @@ public:
       }
       return false;
     }
+  };
+  template<int SuffixLen>
+  class UintIndexIterTmpl : public UintIndexIterator {
+  public:
+    using UintIndexIterator::UintIndexIterator;
+    using UintIndexIterator::buffer_;
+    using UintIndexIterator::pref_len_;
+    using UintIndexIterator::suff_len_;
+    using UintIndexIterator::pos_;
+    using UintIndexIterator::m_id;
+    using UintIndexIterator::max_pos_;
+    using UintIndexIterator::minValue_;
+    void UpdateBufferConstLen() {
+      assert(SuffixLen == suff_len_);
+      SaveAsBigEndianUint64(buffer_ + pref_len_, SuffixLen, pos_ + minValue_);
+    }
     bool Next() override {
       auto& index_ = static_cast<const UintIndex&>(this->index_);
       assert(m_id != size_t(-1));
@@ -279,7 +295,7 @@ public:
       else {
         ++m_id;
         pos_ = pos_ + index_.indexSeq_.zero_seq_len(pos_ + 1) + 1;
-        UpdateBuffer();
+        UpdateBufferConstLen();
         return true;
       }
     }
@@ -295,7 +311,7 @@ public:
       else {
         --m_id;
         pos_ = pos_ - index_.indexSeq_.zero_seq_revlen(pos_) - 1;
-        UpdateBuffer();
+        UpdateBufferConstLen();
         return true;
       }
     }
@@ -454,7 +470,18 @@ public:
   }
   Iterator* NewIterator() const final {
     void* mem = this->AllocIterMem();
-    return new(mem)UintIndexIterator(*this);
+    switch (keyLength_) {
+      case 0: return new(mem)UintIndexIterTmpl<0>(*this);
+      case 1: return new(mem)UintIndexIterTmpl<1>(*this);
+      case 2: return new(mem)UintIndexIterTmpl<2>(*this);
+      case 3: return new(mem)UintIndexIterTmpl<3>(*this);
+      case 4: return new(mem)UintIndexIterTmpl<4>(*this);
+      case 5: return new(mem)UintIndexIterTmpl<5>(*this);
+      case 6: return new(mem)UintIndexIterTmpl<6>(*this);
+      case 7: return new(mem)UintIndexIterTmpl<7>(*this);
+      case 8: return new(mem)UintIndexIterTmpl<8>(*this);
+    }
+    ROCKSDB_DIE("should not goes here");
   }
   json MetaToJson() const final {
     json js;
