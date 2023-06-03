@@ -291,6 +291,18 @@ struct ToplingZipSubReader {
     ROCKSDB_DIE("Bad tag_rs_kind = %d", tag_rs_kind_);
   }
 
+  bool IsOneValuePerUK() const {
+    switch (tag_rs_kind_) {
+    case LegacyZvType: return index_->NumKeys() == type_histogram_[int(ZipValueType::kZeroSeq)] || type_.size() == 0;
+    case RS_Key0_TagN: return true;
+    case RS_Key0_Tag0: return true;
+    case RS_Key0_Tag1: return true;
+    case RS_KeyN_TagN: return false;
+    case RS_KeyN_Tag1: return false;
+    }
+    ROCKSDB_DIE("Bad tag_rs_kind = %d", tag_rs_kind_);
+  }
+
   bool IsWireSeqNumAllZero() const {
     switch (tag_rs_kind_) {
     case LegacyZvType: return index_->NumKeys() == type_histogram_[int(ZipValueType::kZeroSeq)] || type_.size() == 0;
@@ -460,6 +472,13 @@ public:
   const ToplingZipSubReader* LowerBoundSubReader(fstring key) const;
   bool HasAnyZipOffset() const { return hasAnyZipOffset_; }
   bool IterIsLegacyZV() const;
+  bool IsOneValuePerUK() const {
+    for (auto& sub : subReader_) {
+      if (!sub.IsOneValuePerUK())
+        return false;
+    }
+    return true;
+  }
   json ToWebViewJson(const json& dump_options) const;
   std::string ToWebViewString(const json& dump_options) const override;
 };
@@ -471,11 +490,25 @@ struct IterOptLegacyZV : public InternalIterator {
 struct IterOptTagRS : public InternalIterator {
   static constexpr bool is_legacy_zv = false;
 };
+template<class Base>
+struct MultiValuePerUK : public Base {
+  uint32_t  value_count_ = 0;
+  uint32_t  value_index_ = 0;
+  static constexpr bool is_one_value_per_uk = false;
+};
+template<class Base>
+struct OneValuePerUK : public Base {
+  static constexpr uint32_t value_count_ = 1;
+  static constexpr uint32_t value_index_ = 0;
+  static constexpr bool is_one_value_per_uk = true;
+};
 template<class IterOpt>
 class ToplingZipTableIterBase : public IterOpt {
 public:
   using IterBase = ToplingZipTableIterBase;
   using IterOpt::is_legacy_zv;
+  using IterOpt::value_count_;
+  using IterOpt::value_index_;
   const TooZipTableReaderBase* table_reader_;
   const ToplingZipSubReader* subReader_;
   PinnedIteratorsManager*   pinned_iters_mgr_;
@@ -483,8 +516,6 @@ public:
   uint32_t                  min_prefault_pages_;
   SequenceNumber            global_tag_;
   Status                    status_;
-  uint32_t                  value_count_;
-  uint32_t                  value_index_;
   size_t                    seek_cnt_ = 0;
   size_t                    next_cnt_ = 0;
   size_t                    prev_cnt_ = 0;
@@ -552,8 +583,6 @@ public:
     pinned_iters_mgr_ = static_cast<PinnedIteratorsManager*>(&dummy_pin_mgr_);
     rs_bitpos_ = -1;
 //  zip_value_type_ = ZipValueType(255); // NOLINT
-    value_index_ = 0;
-    value_count_ = 0;
     inc_seqscan(r);
     auto* f = r->table_factory_;
     as_atomic(r->live_iter_num_).fetch_add(1, std::memory_order_relaxed);
@@ -566,7 +595,7 @@ public:
         static_cast<PinnedIteratorsManager*>(&dummy_pin_mgr_);
   }
 
-  bool Valid() const final { return 0 != value_count_; }
+  bool Valid() const final { return UINT32_MAX != rs_bitpos_; }
 
   void SeekToFirst() override {
     if (UnzipIterRecord(IndexIterSeekToFirst())) {
@@ -576,7 +605,9 @@ public:
 
   void SeekToLast() override {
     if (UnzipIterRecord(IndexIterSeekToLast())) {
-      value_index_ = value_count_ - 1;
+      if constexpr (!this->is_one_value_per_uk) {
+        value_index_ = value_count_ - 1;
+      }
       DecodeCurrKeyTag();
     }
   }
@@ -645,10 +676,12 @@ public:
 
   void SetIterInvalid() noexcept {
     iter_->SetInvalid();
-    rs_bitpos_ = 0;
+    rs_bitpos_ = UINT32_MAX;
     invalidate_offsets_cache();
-    value_index_ = 0;
-    value_count_ = 0;
+    if constexpr (!this->is_one_value_per_uk) {
+      value_index_ = 0;
+      value_count_ = 0;
+    }
   }
   virtual void invalidate_offsets_cache() noexcept = 0;
 
@@ -668,7 +701,9 @@ public:
     if (hasRecord) {
       size_t recId = iter_->id();
       auto& r = *subReader_;
-      value_index_ = 0;
+      if constexpr (!this->is_one_value_per_uk) {
+        value_index_ = 0;
+      }
       switch (tag_rs_kind_) {
       case LegacyZvType:
        if constexpr (is_legacy_zv) {
@@ -678,7 +713,9 @@ public:
           : ZipValueType::kZeroSeq;
         if (ZipValueType::kZeroSeq == zip_value_type_) {
           // do not fetch value
-          value_count_ = 1;
+          if constexpr (!this->is_one_value_per_uk) {
+            value_count_ = 1;
+          }
           return true;
         } else { // must fetch values because seqnum is stored in value
           return FetchValueZV();
@@ -690,15 +727,21 @@ public:
       case RS_Key0_Tag0:
       case RS_Key0_Tag1:
         rs_bitpos_   = r.krs0_.krs_.select0(recId);
-        value_count_ = r.krs0_.krs_.one_seq_len(rs_bitpos_ + 1) + 1;
+        if constexpr (!this->is_one_value_per_uk) {
+          value_count_ = r.krs0_.krs_.one_seq_len(rs_bitpos_ + 1) + 1;
+        }
         return true;
       case RS_KeyN_TagN:
         rs_bitpos_   = r.krsx_.select0(recId);
-        value_count_ = r.krsx_.one_seq_len(rs_bitpos_ + 1) + 1;
+        if constexpr (!this->is_one_value_per_uk) {
+          value_count_ = r.krsx_.one_seq_len(rs_bitpos_ + 1) + 1;
+        }
         return true;
       case RS_KeyN_Tag1:
         rs_bitpos_   = r.krsn_.krs_.select0(recId);
-        value_count_ = r.krsn_.krs_.one_seq_len(rs_bitpos_ + 1) + 1;
+        if constexpr (!this->is_one_value_per_uk) {
+          value_count_ = r.krsn_.krs_.one_seq_len(rs_bitpos_ + 1) + 1;
+        }
         return true;
       }
       ROCKSDB_DIE("Bad tag_rs_kind_ = %d", tag_rs_kind_);
@@ -792,7 +835,7 @@ public:
       return false;
     }
    #endif
-    if (ZipValueType::kMulti == zip_value_type_) {
+    if (!this->is_one_value_per_uk && ZipValueType::kMulti == zip_value_type_) {
       if (value_buf.capacity() == 0) {
         TERARK_VERIFY(subReader_->zeroCopy_);
         byte_t* buf_copy = (byte_t*)malloc(sizeof(uint32_t) + value_buf.size());
@@ -802,15 +845,22 @@ public:
         value_buf.risk_set_capacity(value_buf.size());
       }
       TERARK_ASSERT_GE(value_buf.size(), sizeof(uint32_t) + 8);
-      ZipValueMultiValue::decode(value_buf, &value_count_);
+      if constexpr (!this->is_one_value_per_uk) {
+        // ^^^^^^^ to avoid compile error
+        ZipValueMultiValue::decode(value_buf, &value_count_);
+      }
       TERARK_ASSERT_GE(value_count_, 1);
       iter_key_len_ += (iter_->key().size() + 8) * value_count_;
     } else {
-      value_count_ = 1;
+      if constexpr (!this->is_one_value_per_uk) {
+        value_count_ = 1;
+      }
       iter_key_len_ += (iter_->key().size() + 8);
     }
     iter_val_len_ += value_buf.size() - mulnum_size;
-    value_index_ = 0;
+    if constexpr (!this->is_one_value_per_uk) {
+      value_index_ = 0;
+    }
     is_value_loaded_ = true;
     return true;
   }
@@ -1021,15 +1071,24 @@ protected:
     }
     if (UnzipIterRecord(ok)) {
       if (0 == cmp) {
-        value_index_ = -1;
-        do {
-          value_index_++;
+        if constexpr (this->is_one_value_per_uk) {
           DecodeCurrKeyTag();
           uint64_t key_tag_ = unaligned_load<uint64_t>(iter_->key().end());
           if ((key_tag_ >> 8u) <= pikey.sequence) {
             return; // done
           }
-        } while (value_index_ + 1 < value_count_);
+        }
+        else {
+          value_index_ = -1;
+          do {
+            value_index_++;
+            DecodeCurrKeyTag();
+            uint64_t key_tag_ = unaligned_load<uint64_t>(iter_->key().end());
+            if ((key_tag_ >> 8u) <= pikey.sequence) {
+              return; // done
+            }
+          } while (value_index_ + 1 < value_count_);
+        }
         // no visible version/sequence for target, use Next();
         // if using Next(), version check is not needed
         Next();
@@ -1132,14 +1191,14 @@ public:
 protected:
   void SeekToAscendingFirst() {
     if (this->UnzipIterRecord(iter_->SeekToFirst())) {
-      if (reverse)
+      if constexpr (reverse && !this->is_one_value_per_uk)
         this->value_index_ = this->value_count_ - 1;
       this->DecodeCurrKeyTag();
     }
   }
   void SeekToAscendingLast() {
     if (this->UnzipIterRecord(iter_->SeekToLast())) {
-      if (!reverse)
+      if constexpr (!reverse && !this->is_one_value_per_uk)
         this->value_index_ = this->value_count_ - 1;
       this->DecodeCurrKeyTag();
     }
@@ -1155,7 +1214,9 @@ protected:
       this->ValueBuf().risk_release_ownership();
     subReader_ = subReader;
     this->tag_rs_kind_ = subReader->tag_rs_kind_;
-    this->value_count_ = 0; // set invalid
+    if constexpr (!reverse && !this->is_one_value_per_uk) {
+      this->value_count_ = 0; // set invalid
+    }
     iter_->Delete();
     iter_ = nullptr; //< for exception by NewIterator
     iter_ = subReader->index_->NewIterator();
@@ -1234,34 +1295,48 @@ protected:
   void Next() final {
     assert(iter_->Valid());
     next_cnt_++;
-    value_index_++;
-    if (value_index_ < value_count_) {
-      DecodeCurrKeyTag();
-    }
-    else {
+    if constexpr (this->is_one_value_per_uk) {
       if (UnzipIterRecord(this->IndexIterNext())) {
         DecodeCurrKeyTag();
+      }
+    }
+    else {
+      value_index_++;
+      if (value_index_ < value_count_) {
+        DecodeCurrKeyTag();
+      }
+      else {
+        if (UnzipIterRecord(this->IndexIterNext())) {
+          DecodeCurrKeyTag();
+        }
       }
     }
   }
   void Prev() final {
     assert(iter_->Valid());
     prev_cnt_++;
-    if (value_index_ > 0) {
-      value_index_--;
-      DecodeCurrKeyTag();
+    if constexpr (this->is_one_value_per_uk) {
+      if (UnzipIterRecord(this->IndexIterPrev())) {
+        DecodeCurrKeyTag();
+      }
     }
     else {
-      if (UnzipIterRecord(this->IndexIterPrev())) {
-        value_index_ = value_count_ - 1;
+      if (value_index_ > 0) {
+        value_index_--;
         DecodeCurrKeyTag();
+      }
+      else {
+        if (UnzipIterRecord(this->IndexIterPrev())) {
+          value_index_ = value_count_ - 1;
+          DecodeCurrKeyTag();
+        }
       }
     }
   }
   terark_flatten
   bool NextAndGetResult(IterateResult* result) noexcept final {
     this->Next();
-    if (LIKELY(0 != this->value_count_)) { // this->Valid()
+    if (LIKELY(this->Valid())) {
       result->SetKey(this->key());
       result->bound_check_result = IterBoundCheck::kUnknown;
       if constexpr (Base::is_legacy_zv) {
@@ -2007,15 +2082,21 @@ void ToplingZipTableReader::SetupForRandomRead() {
 template<class Reader>
 static InternalIterator*
 NewIter(Reader* r, const ReadOptions& ro, Arena* arena,
-        bool ZipOffset, bool IsLegacyZV) {
+        bool ZipOffset, bool IsLegacyZV, bool IsOneValuePerUK) {
   const bool reverse = !!r->isReverseBytewiseOrder_;
 #define ForTemplateArg(a, b) \
   do { \
     if (a == reverse && b == ZipOffset) { \
       if (IsLegacyZV) \
-        return r->template NewIteratorImp<a,b,IterOptLegacyZV>(ro, arena); \
+        if (IsOneValuePerUK) \
+          return r->template NewIteratorImp<a,b,OneValuePerUK<IterOptLegacyZV> >(ro, arena); \
+        else \
+          return r->template NewIteratorImp<a,b,MultiValuePerUK<IterOptLegacyZV> >(ro, arena); \
       else \
-        return r->template NewIteratorImp<a,b,IterOptTagRS>(ro, arena); \
+        if (IsOneValuePerUK) \
+          return r->template NewIteratorImp<a,b,OneValuePerUK<IterOptTagRS> >(ro, arena); \
+        else \
+          return r->template NewIteratorImp<a,b,MultiValuePerUK<IterOptTagRS> >(ro, arena); \
     } \
   } while (0)
   ForTemplateArg(0,0);
@@ -2034,7 +2115,8 @@ NewIterator(const ReadOptions& ro, const SliceTransform* prefix_extractor,
   TERARK_UNUSED_VAR(skip_filters); // unused
   const bool ZipOffset = !!subReader_.store_->is_offsets_zipped();
   const bool IsLegacyZV = LegacyZvType == subReader_.tag_rs_kind_;
-  return NewIter(this, ro, arena, ZipOffset, IsLegacyZV);
+  const bool IsOneValuePerUK = subReader_.IsOneValuePerUK();
+  return NewIter(this, ro, arena, ZipOffset, IsLegacyZV, IsOneValuePerUK);
 }
 
 template<bool reverse, bool ZipOffset, class IterOpt>
@@ -2409,7 +2491,7 @@ NewIterator(const ReadOptions& ro, const SliceTransform* prefix_extractor,
             size_t compaction_readahead_size,
             bool allow_unprepared_value) {
   TERARK_UNUSED_VAR(skip_filters); // unused
-  return NewIter(this, ro, arena, HasAnyZipOffset(), IterIsLegacyZV());
+  return NewIter(this, ro, arena, HasAnyZipOffset(), IterIsLegacyZV(), IsOneValuePerUK());
 }
 
 template<bool reverse, bool ZipOffset, class IterOpt>
