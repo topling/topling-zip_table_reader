@@ -636,24 +636,6 @@ public:
     }
   }
 
-  bool NextAndGetResult(IterateResult* result) noexcept final {
-    this->Next();
-    if (LIKELY(0 != this->value_count_)) { // this->Valid()
-      result->SetKey(this->key());
-      result->bound_check_result = IterBoundCheck::kUnknown;
-      if constexpr (is_legacy_zv) {
-        result->value_prepared = this->is_value_loaded_;
-      } else {
-        assert(!this->is_value_loaded_);
-        result->value_prepared = false;
-      }
-      result->is_valid = true;
-      return true;
-    }
-    result->is_valid = false;
-    return false;
-  }
-
   Status status() const noexcept final { return status_; }
 
   bool IsKeyPinned() const final { return false; }
@@ -1248,6 +1230,7 @@ protected:
   using Base::value_count_;
   using Base::UnzipIterRecord;
   using Base::DecodeCurrKeyTag;
+  terark_flatten
   void Next() final {
     assert(iter_->Valid());
     next_cnt_++;
@@ -1274,6 +1257,24 @@ protected:
         DecodeCurrKeyTag();
       }
     }
+  }
+  terark_flatten
+  bool NextAndGetResult(IterateResult* result) noexcept final {
+    this->Next();
+    if (LIKELY(0 != this->value_count_)) { // this->Valid()
+      result->SetKey(this->key());
+      result->bound_check_result = IterBoundCheck::kUnknown;
+      if constexpr (Base::is_legacy_zv) {
+        result->value_prepared = this->is_value_loaded_;
+      } else {
+        assert(!this->is_value_loaded_);
+        result->value_prepared = false;
+      }
+      result->is_valid = true;
+      return true;
+    }
+    result->is_valid = false;
+    return false;
   }
 };
 template<class Base, bool ZipOffset>
