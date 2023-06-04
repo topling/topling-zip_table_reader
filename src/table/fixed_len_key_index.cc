@@ -179,20 +179,27 @@ public:
 class FixedLenKeyIndex::Iter : public COIndex::FastIter {
 protected:
   const FixedLenKeyIndex* m_index;
+  const byte_t* m_fixed_data;
+  uint32_t m_suffix_len;
   uint32_t m_pref_len;
   uint32_t m_total_len;
   byte_t m_key_data[0];
 
   inline bool Done(size_t id) {
+    return Done(id, m_suffix_len);
+  }
+  inline bool Done(size_t id, size_t suffix_len) {
     m_id = id;
-    fstring key = m_index->m_keys[id];
-    memcpy(m_key_data + m_pref_len, key.data(), key.size());
+    auto key = m_fixed_data + suffix_len * id;
+    memcpy(m_key_data + m_pref_len, key, suffix_len);
     return true;
   }
   bool Fail() { m_id = size_t(-1); return false; }
 public:
   // caller should use placement new and allocate extra mem for m_key_data
   explicit Iter(const FixedLenKeyIndex* index) : m_index(index) {
+    m_fixed_data = index->m_keys.data();
+    m_suffix_len = index->m_keys.m_fixlen;
     m_num = index->NumKeys();
     m_pref_len = index->m_commonPrefixLen;
     m_total_len = m_pref_len + index->m_keys.m_fixlen;
@@ -252,7 +259,7 @@ class FixedLenKeyIndexIterTmpl : public FixedLenKeyIndex::Iter {
 public:
   using Iter::Iter;
   inline bool DoneConstLen(size_t id) {
-    auto key = m_index->m_keys.data() + SuffixLen * id;
+    auto key = m_fixed_data + SuffixLen * id;
     memcpy(m_key_data + m_pref_len, key, SuffixLen);
     return true;
   }
