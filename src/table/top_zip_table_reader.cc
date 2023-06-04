@@ -1291,52 +1291,64 @@ protected:
   using Base::value_count_;
   using Base::UnzipIterRecord;
   using Base::DecodeCurrKeyTag;
-  terark_flatten
   void Next() final {
+    NextAndCheckValid(); // ignore return value
+  }
+  terark_flatten bool NextAndCheckValid() final {
     assert(iter_->Valid());
     next_cnt_++;
     if constexpr (this->is_one_value_per_uk) {
       if (UnzipIterRecord(this->IndexIterNext())) {
         DecodeCurrKeyTag();
+        return true;
       }
     }
     else {
       value_index_++;
       if (value_index_ < value_count_) {
         DecodeCurrKeyTag();
+        return true;
       }
       else {
         if (UnzipIterRecord(this->IndexIterNext())) {
           DecodeCurrKeyTag();
+          return true;
         }
       }
     }
+    return false;
   }
   void Prev() final {
+    PrevAndCheckValid(); // ignore return value
+  }
+  terark_flatten bool PrevAndCheckValid() final {
     assert(iter_->Valid());
     prev_cnt_++;
     if constexpr (this->is_one_value_per_uk) {
       if (UnzipIterRecord(this->IndexIterPrev())) {
         DecodeCurrKeyTag();
+        return true;
       }
     }
     else {
       if (value_index_ > 0) {
         value_index_--;
         DecodeCurrKeyTag();
+        return true;
       }
       else {
         if (UnzipIterRecord(this->IndexIterPrev())) {
           value_index_ = value_count_ - 1;
           DecodeCurrKeyTag();
+          return true;
         }
       }
     }
+    return false;
   }
   terark_flatten
   bool NextAndGetResult(IterateResult* result) noexcept final {
-    this->Next();
-    if (LIKELY(this->Valid())) {
+    if (LIKELY(this->NextAndCheckValid())) {
       result->SetKey(this->key());
       result->bound_check_result = IterBoundCheck::kUnknown;
       if constexpr (Base::is_legacy_zv) {
