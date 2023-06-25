@@ -277,7 +277,9 @@ public:
   }
 };
 COIndex::Iterator* FixedLenKeyIndex::NewIterator() const {
-  void* mem = malloc(sizeof(Iter) + m_commonPrefixLen + m_keys.m_fixlen + 16);
+  auto ikey_cap = std::max<size_t>(m_commonPrefixLen + m_keys.m_fixlen + 8, 64u);
+  auto mem = (char*)malloc(sizeof(Iter) + ikey_cap);
+  memset(mem + sizeof(Iter), 0, ikey_cap);
   switch (m_keys.m_fixlen) {
 #define case_of(SuffixLen) \
   case SuffixLen: return new(mem)FixedLenKeyIndexIterTmpl<SuffixLen>(this)

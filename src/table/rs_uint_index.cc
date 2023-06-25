@@ -185,7 +185,11 @@ class UintIndex : public UintIndexBase {
   const char* commonPrefixData() const { return (const char*)(this + 1); }
   void* AllocIterMem() const {
     // extra 8 bytes for KeyTag(SeqNum & ValueType)
-    return malloc(sizeof(MyBaseIterator) + commonPrefixLen_ + keyLength_ + 8);
+    // 64u is for speed up read key access: callers may read beyond ikey mem
+    auto ikey_cap = std::max(commonPrefixLen_ + keyLength_ + 8, 64u);
+    auto mem = (char*)malloc(sizeof(MyBaseIterator) + ikey_cap);
+    memset(mem + sizeof(MyBaseIterator), 0, ikey_cap);
+    return mem;
   }
 public:
   struct FileHeader : public MyBaseFileHeader {
