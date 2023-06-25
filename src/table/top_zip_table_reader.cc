@@ -2604,6 +2604,7 @@ ToplingZipTableMultiReader::Open(RandomAccessFileReader* file, Slice file_data,
   LoadCommonPart(file, tro, file_data, kToplingZipTableMagicNumber);
   const auto& ioptions = tro.ioptions;
   TableProperties* props = table_properties_.get();
+  props->compression_name = "ManyZip";
   uint64_t file_size = file_data.size_;
   BlockContents offsetBlock = ReadMetaBlockE(file, file_size,
       kToplingZipTableMagicNumber, ioptions, kToplingZipTableOffsetBlock);
