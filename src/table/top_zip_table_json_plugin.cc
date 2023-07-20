@@ -497,6 +497,14 @@ struct ToplingZipTableFactory_Manip : PluginManipFunc<TableFactory> {
         return std::move(oss);
       }
       json djs;
+      bool html = JsonSmartBool(dump_options, "html", true);
+      if (html) {
+        djs["document"] =
+          "<a href='https://github.com/topling/sideplugin-wiki-en/wiki/ToplingZipTable'>Document(English)</a>"
+          " | "
+          "<a href='https://github.com/topling/rockside/wiki/ToplingZipTable'>文档（中文）</a>"
+          ;
+      }
       djs["Options"] = o->ToJson(dump_options);
       djs["Env"] = JS_TopZipTable_Global_Env();
       t->ToJson(dump_options, djs);
