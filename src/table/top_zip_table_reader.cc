@@ -87,7 +87,8 @@ Status DecompressDict(Slice dictInfo, Slice dict, valvec<byte_t>* output_dict) {
 }
 
 /// @brief Zipped TagArray
-class ZTagArray : public UintVecMin0 {
+class ZTagArray {
+  UintVecMin0 ui_vec_;
   uint64_t    min_seq_ = 0;
   byte_t      vtr_width_ = 0;
   byte_t      vtr_mask_ = 0;
@@ -95,29 +96,29 @@ class ZTagArray : public UintVecMin0 {
   ValueType   vtr_to_vt_[13] = {};
 public:
   ~ZTagArray() {
-    this->risk_release_ownership();
+    ui_vec_.risk_release_ownership();
   }
   void set_user_data(const byte_t* base, const TableMultiPartInfo::KeyValueOffset& kvo) {
     TERARK_VERIFY_LE(kvo.vtr_num, sizeof(vtr_to_vt_));
     memset(vtr_to_vt_, 255, sizeof(vtr_to_vt_)); // set as invalid
-    vtr_width_ = compute_uintbits(kvo.vtr_num - 1);
+    vtr_width_ = ui_vec_.compute_uintbits(kvo.vtr_num - 1);
     vtr_mask_ = byte_t((1 << vtr_width_) - 1);
     vtr_num_ = kvo.vtr_num;
     min_seq_ = kvo.min_seq;
     auto tag_width = kvo.seq_width + vtr_width_;
-    UintVecMin0::risk_set_data((byte_t*)base, kvo.tag_num, tag_width);
-    TERARK_VERIFY_EQ(UintVecMin0::mem_size(), kvo.tag_bytes);
-    memcpy(vtr_to_vt_, base + UintVecMin0::mem_size(), kvo.vtr_num);
+    ui_vec_.risk_set_data((byte_t*)base, kvo.tag_num, tag_width);
+    TERARK_VERIFY_EQ(ui_vec_.mem_size(), kvo.tag_bytes);
+    memcpy(vtr_to_vt_, base + ui_vec_.mem_size(), kvo.vtr_num);
   }
   uint64_t operator[](size_t tagId) const {
-    uint64_t raw = this->get(tagId);
+    uint64_t raw = ui_vec_.get(tagId);
     uint64_t vtr = raw & vtr_mask_; TERARK_ASSERT_LT(vtr, vtr_num_);
     uint64_t vt  = vtr_to_vt_[vtr];
     uint64_t seq = min_seq_ + (raw >> vtr_width_);
     return seq << 8 | vt;
   }
   void GetSequenceAndType(size_t tagId, uint64_t* seq, ValueType* vt) const {
-    uint64_t raw = this->get(tagId);
+    uint64_t raw = ui_vec_.get(tagId);
     uint64_t vtr = raw & vtr_mask_; TERARK_ASSERT_LT(vtr, vtr_num_);
     *vt  = vtr_to_vt_[vtr];
     *seq = min_seq_ + (raw >> vtr_width_);
@@ -128,7 +129,10 @@ public:
   }
   size_t vtr_num() const { return vtr_num_; }
   size_t vtr_width() const { return vtr_width_; }
-  size_t seq_width() const { return uintbits() - vtr_width_; }
+  size_t seq_width() const { return ui_vec_.uintbits() - vtr_width_; }
+  size_t uintbits() const { return ui_vec_.uintbits(); }
+  size_t mem_size() const { return ui_vec_.mem_size(); }
+  size_t size() const { return ui_vec_.size(); }
   uint64_t min_seq() const { return min_seq_; }
 };
 
