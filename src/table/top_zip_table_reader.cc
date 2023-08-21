@@ -536,8 +536,9 @@ public:
   }
   valvec<byte_t>& ValueBuf() const { return cache_offsets()->recData; }
 
-  void inc_seqscan(TooZipTableReaderBase* r) {
-    if (g_tls_is_seqscan) {
+  void inc_seqscan(TooZipTableReaderBase* r, const ReadOptions& ro) {
+    // fill_cache == false implies bulk scan
+    if (g_tls_is_seqscan || !ro.fill_cache) {
       is_seqscan_ = true;
       std::lock_guard<std::mutex> lock(r->seqscan_iter_mtx_);
       if (1 == ++r->seqscan_iter_cnt_)
@@ -583,7 +584,7 @@ public:
     pinned_iters_mgr_ = static_cast<PinnedIteratorsManager*>(&dummy_pin_mgr_);
     rs_bitpos_ = -1;
 //  zip_value_type_ = ZipValueType(255); // NOLINT
-    inc_seqscan(r);
+    inc_seqscan(r, ro);
     auto* f = r->table_factory_;
     as_atomic(r->live_iter_num_).fetch_add(1, std::memory_order_relaxed);
     as_atomic(f->cumu_iter_num).fetch_add(1, std::memory_order_relaxed);
