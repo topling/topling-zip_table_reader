@@ -102,6 +102,7 @@ struct ToplingZipTableOptions {
   //size_t maxRawKeyValueBytes = 0; // 0 indicate 5*target_file_size
 
   bool   enableApproximateKeyAnchors = true;
+  bool   preadUseRocksdbFS = false;
 
   static constexpr size_t MAX_PREFIX_LEN = 16;
 };

@@ -142,6 +142,7 @@ struct ToplingZipSubReader {
   size_t estimateUnzipCap_;
   byte_t prefix_data_[ToplingZipTableOptions::MAX_PREFIX_LEN];
   byte_t prefix_len_;
+  bool   preadUseRocksdbFS_: 1;
   bool   storeUsePread_ : 1;
   bool   zeroCopy_ : 1;
   signed char debugLevel_;
@@ -208,7 +209,7 @@ struct ToplingZipSubReader {
   KeyRankCacheEntry krce_{};
 
   void InitKeyRankCache(const void*, const KeyRankCacheEntry&);
-  void InitUsePread(int minPreadLen);
+  void InitUsePread(const ToplingZipTableOptions&);
   size_t StoreDataSize() const;
 
   void GetRecordAppend(size_t recId, valvec<byte_t>* tbuf, bool async) const;
@@ -1417,17 +1418,18 @@ size_t ToplingZipSubReader::StoreDataSize() const {
   return dsize;
 }
 
-void ToplingZipSubReader::InitUsePread(int minPreadLen) {
-  if (minPreadLen < 0) {
+void ToplingZipSubReader::InitUsePread(const ToplingZipTableOptions& tzto) {
+  preadUseRocksdbFS_ = tzto.preadUseRocksdbFS;
+  if (tzto.minPreadLen < 0) {
     storeUsePread_ = false;
   }
-  else if (minPreadLen == 0) {
+  else if (tzto.minPreadLen == 0) {
     storeUsePread_ = true;
   }
   else {
     size_t numRecords = store_->num_records();
     size_t memSize = store_->get_mmap().size();
-    storeUsePread_ = memSize > minPreadLen * numRecords &&
+    storeUsePread_ = memSize > tzto.minPreadLen * numRecords &&
                      StoreDataSize() > rawReaderSize_ / 2;
   }
   this->zeroCopy_ = store_->support_zero_copy();
@@ -1452,7 +1454,7 @@ FsPread(void* vself, size_t offset, size_t len, valvec<byte_t>* buf) {
   if (UNLIKELY(0 == len)) {
     return bufdata;
   }
- #if defined(TOPLING_ZIP_TABLE_USE_ROCKSDB_FS_READ)
+if (UNLIKELY(self->preadUseRocksdbFS_)) {
   IOOptions ioopt;
   IODebugContext dctx;
   Slice unused;
@@ -1475,7 +1477,7 @@ FsPread(void* vself, size_t offset, size_t len, valvec<byte_t>* buf) {
     // to be catched by ToplingZipSubReader::Get()
     throw std::logic_error(s.ToString());
   }
- #else
+} else {
   // `IOOptions::property_bag` is an std::unordered_map, although it is empty
   // in most cases, it incurs considerable overheads
   int fd = (int)self->storeFD_;
@@ -1490,7 +1492,7 @@ FsPread(void* vself, size_t offset, size_t len, valvec<byte_t>* buf) {
     auto rd = pread(fd, bufdata, len, offset);
     PREAD_CHECK_RESULT(rd);
   }
- #endif
+}
   return bufdata;
 }
 
@@ -2008,7 +2010,7 @@ size_t TooZipTableReaderBase::InitPart(
   if (hugepage_mem_.capacity() != 0) {
     StoreMetaUseHugePage(part.store_.get(), &hugepage_mem_);
   }
-  part.InitUsePread(tf->table_options_.minPreadLen);
+  part.InitUsePread(tf->table_options_);
   part.store_->set_min_prefetch_pages(tf->table_options_.minPrefetchPages);
   offset += curr.value;
   size_t keyNum = part.index_->NumKeys();
