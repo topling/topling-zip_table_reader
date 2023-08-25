@@ -1447,14 +1447,15 @@ void ToplingZipSubReader::InitUsePread(const ToplingZipTableOptions& tzto) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 static const byte_t*
-FsPread(void* vself, size_t offset, size_t len, valvec<byte_t>* buf) {
+RocksdbFsPread(void* vself, size_t offset, size_t len, valvec<byte_t>* buf) {
   auto self = (ToplingZipSubReader*)vself;
   buf->TERARK_IF_DEBUG(resize_fill(len, 0xCC), resize_no_init(len));
   auto bufdata = buf->data();
   if (UNLIKELY(0 == len)) {
     return bufdata;
   }
-if (UNLIKELY(self->preadUseRocksdbFS_)) {
+  // `IOOptions::property_bag` is an std::unordered_map, although it is empty
+  // in most cases, it incurs considerable overheads
   IOOptions ioopt;
   IODebugContext dctx;
   Slice unused;
@@ -1477,9 +1478,17 @@ if (UNLIKELY(self->preadUseRocksdbFS_)) {
     // to be catched by ToplingZipSubReader::Get()
     throw std::logic_error(s.ToString());
   }
-} else {
-  // `IOOptions::property_bag` is an std::unordered_map, although it is empty
-  // in most cases, it incurs considerable overheads
+  return bufdata;
+}
+
+static const byte_t*
+PosixFsPread(void* vself, size_t offset, size_t len, valvec<byte_t>* buf) {
+  auto self = (ToplingZipSubReader*)vself;
+  buf->TERARK_IF_DEBUG(resize_fill(len, 0xCC), resize_no_init(len));
+  auto bufdata = buf->data();
+  if (UNLIKELY(0 == len)) {
+    return bufdata;
+  }
   int fd = (int)self->storeFD_;
   if (auto stats = self->stats_) {
     auto t0 = qtime::now();
@@ -1492,7 +1501,6 @@ if (UNLIKELY(self->preadUseRocksdbFS_)) {
     auto rd = pread(fd, bufdata, len, offset);
     PREAD_CHECK_RESULT(rd);
   }
-}
   return bufdata;
 }
 
@@ -1539,7 +1547,8 @@ const {
     store_->fspread_record_append(&FiberAsyncRead, (void*)this,
                                   storeOffset_, recId, tbuf);
   } else if (storeUsePread_) {
-    store_->fspread_record_append(&FsPread, (void*)this, storeOffset_, recId, tbuf);
+    auto FsPread = preadUseRocksdbFS_ ? &RocksdbFsPread : &PosixFsPread;
+    store_->fspread_record_append(FsPread, (void*)this, storeOffset_, recId, tbuf);
   } else {
     store_->get_record_append(recId, tbuf);
   }
