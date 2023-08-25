@@ -1560,6 +1560,7 @@ const {
   }
 }
 
+terark_forceinline
 void ToplingZipSubReader::IterGetRecordAppend(size_t recId, BlobStore::CacheOffsets* co)
 const {
   store_->get_record_append(recId, co);
