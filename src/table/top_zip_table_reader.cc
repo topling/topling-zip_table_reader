@@ -1602,7 +1602,7 @@ const {
   ROCKSDB_ASSERT_GE(ikey.size(), kNumInternalBytes);
   ParsedInternalKey pikey(ikey);
   size_t keyId = index_->Find(pikey.user_key);
-  if (size_t(-1) == keyId) {
+  if (UNLIKELY(size_t(-1) == keyId)) {
     return Status::OK();
   }
   const uint64_t seqno = pikey.sequence;
@@ -1659,7 +1659,7 @@ const {
   size_t recId = index_->Find(pikey.user_key);
   //auto t1 = qtime::now();
   //perf_context.read_index_block_nanos += t0.ns(t1);
-  if (size_t(-1) == recId) {
+  if (UNLIKELY(size_t(-1) == recId)) {
     return Status::OK();
   }
   const uint64_t seqno = pikey.sequence;
