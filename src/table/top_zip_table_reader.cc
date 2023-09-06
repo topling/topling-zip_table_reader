@@ -1641,8 +1641,7 @@ const {
           break;
         }
       } else {
-        bool ignore = false;
-        if (!get_context->SaveValue(pikey, val, &ignore)) // do not pin
+        if (!get_context->SaveValue(pikey, val)) // do not pin
           break;
       }
     }
