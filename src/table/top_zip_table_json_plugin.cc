@@ -49,6 +49,7 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     ROCKSDB_JSON_OPT_PROP(js, estimateCompressionRatio);
     ROCKSDB_JSON_OPT_PROP(js, keyRankCacheRatio);
     ROCKSDB_JSON_OPT_PROP(js, sampleRatio);
+    ROCKSDB_JSON_OPT_PROP(js, sampleRatioMultiplier);
     ROCKSDB_JSON_OPT_PROP(js, localTempDir);
     ROCKSDB_JSON_OPT_PROP(js, indexType);
     ROCKSDB_JSON_OPT_SIZE(js, softZipWorkingMemLimit);
@@ -95,6 +96,7 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     ROCKSDB_JSON_SET_PROP(djs, estimateCompressionRatio);
     ROCKSDB_JSON_SET_PROP(djs, keyRankCacheRatio);
     ROCKSDB_JSON_SET_PROP(djs, sampleRatio);
+    ROCKSDB_JSON_SET_PROP(djs, sampleRatioMultiplier);
     ROCKSDB_JSON_SET_PROP(djs, localTempDir);
     ROCKSDB_JSON_SET_PROP(djs, indexType);
     ROCKSDB_JSON_SET_SIZE(djs, softZipWorkingMemLimit);
