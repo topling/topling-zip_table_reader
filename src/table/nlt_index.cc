@@ -234,7 +234,7 @@ struct NestLoudsTrieIndexBase : public COIndex {
 
   json MetaToJson() const final {
     auto trie = m_trie.get();
-    DFA_MmapHeader header;
+    DFA_MmapHeader header = {};
     trie->get_stat(&header);
     json js;
     js["NestLevel"] = trie->zp_nest_level();
