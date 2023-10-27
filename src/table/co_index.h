@@ -110,6 +110,7 @@ public:
   virtual void BuildCache(double cacheRatio) = 0;
   virtual json MetaToJson() const = 0;
   virtual bool HasFastApproximateRank() const noexcept;
+  virtual fstring ResidentMemory() const noexcept;
   void VerifyDictRank() const;
 };
 

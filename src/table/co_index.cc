@@ -421,4 +421,8 @@ bool COIndex::HasFastApproximateRank() const noexcept {
   return true;
 }
 
+fstring COIndex::ResidentMemory() const noexcept {
+  return Memory();
+}
+
 } // namespace rocksdb

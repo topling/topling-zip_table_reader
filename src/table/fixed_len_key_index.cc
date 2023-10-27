@@ -129,6 +129,9 @@ public:
     TERARK_VERIFY(nullptr != m_header);
     return fstring((const char*)m_header, m_header->file_size);
   }
+  fstring ResidentMemory() const noexcept override {
+    return m_keys.da_memory();
+  }
   std::string NthKey(size_t nth) const final {
     TERARK_VERIFY_LT(nth, m_num_keys);
     const size_t pref_len = m_commonPrefixLen;

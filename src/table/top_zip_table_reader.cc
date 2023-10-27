@@ -2079,6 +2079,20 @@ ToplingZipTableReader::Open(RandomAccessFileReader* file, Slice file_data,
   );
 }
 
+static void OptimizeIndexMemory(fstring all, fstring resident) {
+  TERARK_VERIFY_GE(resident.begin(), all.begin());
+  TERARK_VERIFY_LE(resident.end(), all.end());
+  MmapAdvSeq(resident);
+  MmapWarmUp(resident);
+  // non-resident area:
+  fstring before(all.data(), resident.data());
+  fstring after(resident.end(), all.end());
+  if (before.size() >= 4096)
+    MmapAdvRnd(before);
+  if (after.size() >= 4096)
+    MmapAdvRnd(after);
+}
+
 void ToplingZipTableReader::SetupForRandomRead() {
   const size_t indexSize = subReader_.index_->Memory().size();
   const auto& tzto = table_factory_->table_options_;
@@ -2098,8 +2112,8 @@ void ToplingZipTableReader::SetupForRandomRead() {
     }
   }
   else if (WarmupLevel::kIndex == tzto.warmupLevel) {
-    MmapAdvSeq(file_data_.data_, indexSize);
-    MmapWarmUp(file_data_.data_, indexSize);
+    OptimizeIndexMemory(subReader_.index_->Memory(),
+                        subReader_.index_->ResidentMemory());
     for (auto& block : subReader_.store_->get_meta_blocks()) {
       MmapAdvSeq(block.data);
       MmapWarmUp(block.data);
@@ -2671,13 +2685,12 @@ void ToplingZipTableMultiReader::SetupForRandomRead() {
   for (size_t i = 0; i < subReader_.size(); ++i) {
     auto part = &subReader_[i];
     if (hugepage_mem_.capacity() == 0) {
-      fstring mem = subReader_[i].index_->Memory();
+      fstring mem = part->index_->Memory();
       if (tzto.indexMemAsResident) {
         MlockMem(mem.p, mem.n);
       }
       else if (WarmupLevel::kIndex == tzto.warmupLevel) {
-        MmapAdvSeq(mem.p, mem.n);
-        MmapWarmUp(mem.p, mem.n);
+        OptimizeIndexMemory(mem, part->index_->ResidentMemory());
       }
     }
     if (advise_random_on_open_ && tzto.warmupLevel < WarmupLevel::kValue) {
