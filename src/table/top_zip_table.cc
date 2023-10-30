@@ -122,12 +122,6 @@ size_t GetFixedPrefixLen(const SliceTransform* tr) {
 ToplingZipTableFactory::ToplingZipTableFactory(
     const ToplingZipTableOptions& tzto)
 : table_options_(tzto) {
-    if (tzto.minPreadLen >= 0 && tzto.cacheCapacityBytes) {
-        bool aio = false;
-        size_t maxFiles = -1;
-        cache_.reset(LruReadonlyCache::create(
-            tzto.cacheCapacityBytes, tzto.cacheShards, maxFiles, aio));
-    }
     size_t fast_num = 1;
     if (tzto.keyPrefixLen > 1) {
         fast_num = 32*1024;
@@ -239,21 +233,6 @@ const {
     return Status::InvalidArgument(msg);
   }
   return Status::OK();
-}
-
-bool ToplingZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
-  auto tztf = dynamic_cast<const ToplingZipTableFactory*>(factory);
-  if (tztf) {
-    if (tztf->cache()) {
-      tztf->cache()->print_stat_cnt(fp);
-      return true;
-    } else {
-      fprintf(fp, "PrintCacheStat: terark user cache == nullptr\n");
-    }
-  } else {
-    fprintf(fp, "PrintCacheStat: factory is not ToplingZipTableFactory\n");
-  }
-  return false;
 }
 
 } // namespace rocksdb

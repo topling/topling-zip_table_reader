@@ -90,8 +90,6 @@ struct ToplingZipTableOptions {
   /// == 0: always use pread
   ///  > 0: use pread if BlobStore avg record len > minPreadLen
   int    minPreadLen         = 0;
-  int    cacheShards         = 17; // to reduce lock competition
-  size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
   bool   compressGlobalDict = false;
   bool   indexMemAsResident = false;
   bool   indexMemAsHugePage = 0;
@@ -154,7 +152,5 @@ NewToplingZipTableFactory(const ToplingZipTableOptions&);
 
 std::shared_ptr<class TableFactory>
 SingleToplingZipTableFactory(const ToplingZipTableOptions&);
-
-bool ToplingZipTablePrintCacheStat(const class TableFactory*, FILE*);
 
 }  // namespace rocksdb

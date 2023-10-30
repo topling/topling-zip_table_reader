@@ -30,7 +30,6 @@
 #include <terark/util/atomic.hpp>
 #include <terark/util/profiling.hpp>
 #include <terark/util/sortable_strvec.hpp>
-#include <terark/zbs/lru_page_cache.hpp>
 #include <terark/gold_hash_map.hpp>
 
 namespace rocksdb {
@@ -38,7 +37,6 @@ namespace rocksdb {
 using terark::fstring;
 using terark::valvec;
 using terark::byte_t;
-using terark::LruReadonlyCache;
 
 extern const std::string kToplingZipTableValueDictBlock;
 extern const std::string kToplingZipTableOffsetBlock;
@@ -239,11 +237,8 @@ public:
 
   bool IsDeleteRangeSupported() const override { return true; }
 
-  LruReadonlyCache* cache() const { return cache_.get(); }
-
 // ToplingZipTableFactory is used internally, public all members for simple
   ToplingZipTableOptions table_options_;
-  boost::intrusive_ptr<LruReadonlyCache> cache_;
 
   void add_zip_size_info(size_t prefix_idx, const ZipSizeInfo& zsi) const {
     auto& map = is_compaction_worker_ ? level_zip_size_inc_ : level_zip_size_;
