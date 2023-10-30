@@ -144,9 +144,6 @@ void
 ToplingZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
       const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
-const class WriteBatchEntryIndexFactory*
-patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback = nullptr);
-
 std::shared_ptr<class TableFactory>
 NewToplingZipTableFactory(const ToplingZipTableOptions&);
 
