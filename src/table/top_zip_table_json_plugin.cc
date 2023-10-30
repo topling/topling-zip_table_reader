@@ -72,6 +72,7 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     ROCKSDB_JSON_OPT_SIZE(js, fixedLenIndexCacheLeafSize);
     ROCKSDB_JSON_OPT_PROP(js, enableApproximateKeyAnchors);
     ROCKSDB_JSON_OPT_PROP(js, preadUseRocksdbFS);
+    ROCKSDB_JSON_OPT_PROP(js, needCompactMaxLevel);
   }
   json ToJson(const json& dump_options) const {
     json djs;
@@ -115,6 +116,7 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     ROCKSDB_JSON_SET_SIZE(djs, fixedLenIndexCacheLeafSize);
     ROCKSDB_JSON_SET_PROP(djs, enableApproximateKeyAnchors);
     ROCKSDB_JSON_SET_PROP(djs, preadUseRocksdbFS);
+    ROCKSDB_JSON_SET_PROP(djs, needCompactMaxLevel);
     return djs;
   }
 };

@@ -102,6 +102,7 @@ struct ToplingZipTableOptions {
 
   bool   enableApproximateKeyAnchors = true;
   bool   preadUseRocksdbFS = false;
+  int    needCompactMaxLevel = -2; // disable by default
 
   static constexpr size_t MAX_PREFIX_LEN = 16;
 };
