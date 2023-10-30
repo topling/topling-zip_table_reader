@@ -243,7 +243,6 @@ bool ToplingZipTableOptionsFromEnv(ToplingZipTableOptions& tzo) {
   MyGetInt   (tzo, offsetArrayBlockUnits);
   MyGetInt   (tzo, indexNestScale       );
   MyGetBool  (tzo, forceLegacyZvType    );
-  MyGetBool  (tzo, indexMemAsResident   );
   MyGetBool  (tzo, indexMemAsHugePage   );
 
   terark::minimize(tzo.keyPrefixLen, tzo.MAX_PREFIX_LEN);

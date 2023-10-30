@@ -91,7 +91,6 @@ struct ToplingZipTableOptions {
   ///  > 0: use pread if BlobStore avg record len > minPreadLen
   int    minPreadLen         = 0;
   bool   compressGlobalDict = false;
-  bool   indexMemAsResident = false;
   bool   indexMemAsHugePage = 0;
   bool   speedupNestTrieBuild = true;
   int    bytesPerBatch = 256*1024;
