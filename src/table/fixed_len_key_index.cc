@@ -17,7 +17,7 @@ class FixedLenKeyIndex : public COIndex {
 public:
   static constexpr char index_name[] = "FixedLenKeyIndex";
   DaCacheFixedStrVec m_keys;
-  size_t m_commonPrefixLen;
+  uint32_t m_commonPrefixLen;
 
   struct Header : ToplingIndexHeader {
     uint64_t checksum;
@@ -329,7 +329,7 @@ public:
     MinMemIO mio(fix->m_commonPrefixData);
     mio.ensureWrite(ks.prefix.data(), ks.prefix.size());
     mio.ensureWrite(ks.minKey.data(), cplen);
-    fix->m_commonPrefixLen = full_cplen;
+    fix->m_commonPrefixLen = uint32_t(full_cplen);
     fix->m_num_keys = ks.numKeys;
     if (tzopt.fixedLenIndexCacheLeafSize >= 64) {
       ROCKS_LOG_DEBUG(iopt->info_log,
@@ -356,8 +356,8 @@ public:
   COIndexUP LoadMemory(fstring mem) const override {
     auto header = (const Header*)mem.data();
     TERARK_VERIFY_EQ(mem.size(), header->file_size);
-    size_t pref_len = header->reserved_80_4;
-    size_t fixlen = header->reserved_92_4;
+    uint32_t pref_len = header->reserved_80_4;
+    uint32_t fixlen = header->reserved_92_4;
     size_t num = header->reserved_102_24;
     size_t meta_size = align_up(sizeof(Header) + pref_len, 16);
     auto raw = malloc(sizeof(FixedLenKeyIndex) + pref_len);
@@ -376,7 +376,7 @@ void FixedLenKeyIndex::SaveMmap(std::function<void(const void*, size_t)> write) 
   Header h;
   memset(&h, 0, sizeof(h));
   h.magic_len = strlen(index_name);
-  static_assert(strlen(index_name) < sizeof(h.magic));
+  static_assert(sizeof(index_name) <= sizeof(h.magic));
   strcpy(h.magic, index_name);
   fstring clazz = COIndexGetClassName(typeid(FixedLenKeyIndex));
   TERARK_VERIFY_LT(clazz.size(), sizeof(h.class_name));

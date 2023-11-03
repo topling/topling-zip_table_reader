@@ -1,3 +1,7 @@
+#if defined(__clang__)
+  #pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#endif
+
 #include "top_zip_internal.h"
 #include "co_index.h"
 
@@ -611,7 +615,7 @@ public:
 
   void SeekToLast() override {
     if (UnzipIterRecord(IndexIterSeekToLast())) {
-      if constexpr (!this->is_one_value_per_uk) {
+      if constexpr (!IterOpt::is_one_value_per_uk) {
         value_index_ = value_count_ - 1;
       }
       DecodeCurrKeyTag();
@@ -684,7 +688,7 @@ public:
     iter_->SetInvalid();
     rs_bitpos_ = UINT32_MAX;
     invalidate_offsets_cache();
-    if constexpr (!this->is_one_value_per_uk) {
+    if constexpr (!IterOpt::is_one_value_per_uk) {
       value_index_ = 0;
       value_count_ = 0;
     }
@@ -707,7 +711,7 @@ public:
     if (hasRecord) {
       size_t recId = iter_->id();
       auto& r = *subReader_;
-      if constexpr (!this->is_one_value_per_uk) {
+      if constexpr (!IterOpt::is_one_value_per_uk) {
         value_index_ = 0;
       }
       switch (tag_rs_kind_) {
@@ -719,7 +723,7 @@ public:
           : ZipValueType::kZeroSeq;
         if (ZipValueType::kZeroSeq == zip_value_type_) {
           // do not fetch value
-          if constexpr (!this->is_one_value_per_uk) {
+          if constexpr (!IterOpt::is_one_value_per_uk) {
             value_count_ = 1;
           }
           return true;
@@ -733,19 +737,19 @@ public:
       case RS_Key0_Tag0:
       case RS_Key0_Tag1:
         rs_bitpos_   = r.krs0_.krs_.select0(recId);
-        if constexpr (!this->is_one_value_per_uk) {
+        if constexpr (!IterOpt::is_one_value_per_uk) {
           value_count_ = r.krs0_.krs_.one_seq_len(rs_bitpos_ + 1) + 1;
         }
         return true;
       case RS_KeyN_TagN:
         rs_bitpos_   = r.krsx_.select0(recId);
-        if constexpr (!this->is_one_value_per_uk) {
+        if constexpr (!IterOpt::is_one_value_per_uk) {
           value_count_ = r.krsx_.one_seq_len(rs_bitpos_ + 1) + 1;
         }
         return true;
       case RS_KeyN_Tag1:
         rs_bitpos_   = r.krsn_.krs_.select0(recId);
-        if constexpr (!this->is_one_value_per_uk) {
+        if constexpr (!IterOpt::is_one_value_per_uk) {
           value_count_ = r.krsn_.krs_.one_seq_len(rs_bitpos_ + 1) + 1;
         }
         return true;
@@ -841,7 +845,7 @@ public:
       return false;
     }
    #endif
-    if (!this->is_one_value_per_uk && ZipValueType::kMulti == zip_value_type_) {
+    if (!IterOpt::is_one_value_per_uk && ZipValueType::kMulti == zip_value_type_) {
       if (value_buf.capacity() == 0) {
         TERARK_VERIFY(subReader_->zeroCopy_);
         byte_t* buf_copy = (byte_t*)malloc(sizeof(uint32_t) + value_buf.size());
@@ -851,20 +855,20 @@ public:
         value_buf.risk_set_capacity(value_buf.size());
       }
       TERARK_ASSERT_GE(value_buf.size(), sizeof(uint32_t) + 8);
-      if constexpr (!this->is_one_value_per_uk) {
+      if constexpr (!IterOpt::is_one_value_per_uk) {
         // ^^^^^^^ to avoid compile error
         ZipValueMultiValue::decode(value_buf, &value_count_);
       }
       TERARK_ASSERT_GE(value_count_, 1);
       iter_key_len_ += (iter_->key().size() + 8) * value_count_;
     } else {
-      if constexpr (!this->is_one_value_per_uk) {
+      if constexpr (!IterOpt::is_one_value_per_uk) {
         value_count_ = 1;
       }
       iter_key_len_ += (iter_->key().size() + 8);
     }
     iter_val_len_ += value_buf.size() - mulnum_size;
-    if constexpr (!this->is_one_value_per_uk) {
+    if constexpr (!IterOpt::is_one_value_per_uk) {
       value_index_ = 0;
     }
     is_value_loaded_ = true;
@@ -1077,7 +1081,7 @@ protected:
     }
     if (UnzipIterRecord(ok)) {
       if (0 == cmp) {
-        if constexpr (this->is_one_value_per_uk) {
+        if constexpr (IterOpt::is_one_value_per_uk) {
           DecodeCurrKeyTag();
           uint64_t key_tag_ = unaligned_load<uint64_t>(iter_->key().end());
           if ((key_tag_ >> 8u) <= pikey.sequence) {
@@ -1197,14 +1201,14 @@ public:
 protected:
   void SeekToAscendingFirst() {
     if (this->UnzipIterRecord(iter_->SeekToFirst())) {
-      if constexpr (reverse && !this->is_one_value_per_uk)
+      if constexpr (reverse && !IterOpt::is_one_value_per_uk)
         this->value_index_ = this->value_count_ - 1;
       this->DecodeCurrKeyTag();
     }
   }
   void SeekToAscendingLast() {
     if (this->UnzipIterRecord(iter_->SeekToLast())) {
-      if constexpr (!reverse && !this->is_one_value_per_uk)
+      if constexpr (!reverse && !IterOpt::is_one_value_per_uk)
         this->value_index_ = this->value_count_ - 1;
       this->DecodeCurrKeyTag();
     }
@@ -1220,7 +1224,7 @@ protected:
       this->ValueBuf().risk_release_ownership();
     subReader_ = subReader;
     this->tag_rs_kind_ = subReader->tag_rs_kind_;
-    if constexpr (!reverse && !this->is_one_value_per_uk) {
+    if constexpr (!reverse && !IterOpt::is_one_value_per_uk) {
       this->value_count_ = 0; // set invalid
     }
     iter_->Delete();
@@ -1303,7 +1307,7 @@ protected:
   terark_flatten bool NextAndCheckValid() final {
     assert(iter_->Valid());
     next_cnt_++;
-    if constexpr (this->is_one_value_per_uk) {
+    if constexpr (Base::is_one_value_per_uk) {
       if (UnzipIterRecord(this->IndexIterNext())) {
         DecodeCurrKeyTag();
         return true;
@@ -1330,7 +1334,7 @@ protected:
   terark_flatten bool PrevAndCheckValid() final {
     assert(iter_->Valid());
     prev_cnt_++;
-    if constexpr (this->is_one_value_per_uk) {
+    if constexpr (Base::is_one_value_per_uk) {
       if (UnzipIterRecord(this->IndexIterPrev())) {
         DecodeCurrKeyTag();
         return true;

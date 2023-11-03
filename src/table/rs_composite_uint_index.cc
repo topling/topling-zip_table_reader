@@ -334,7 +334,7 @@ public:
     container_.risk_release_ownership();
   }
   void set_key_len(size_t len) {
-    container_.m_fixlen = len;
+    container_.m_fixlen = uint32_t(len);
   }
   void set_min_value(uint64_t min_value) { TERARK_DIE("Unexpected"); }
   void set_size(size_t sz) {

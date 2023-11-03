@@ -131,7 +131,7 @@ struct UintIndexBase : public COIndex {
         auto cpdst = (char*)ptr + obj_size;
         memcpy(cpdst, cpsrc, cplen);
       }
-      ptr->commonPrefixLen_ = cplen;
+      ptr->commonPrefixLen_ = uint32_t(cplen);
     }
   };
 
@@ -367,7 +367,7 @@ public:
       MinMemIO mio(raw + sizeof(UintIndex<RankSelect>));
       mio.ensureWrite(ks.prefix.data(), ks.prefix.size());
       mio.ensureWrite(ks.minKey.data(), cplen);
-      ptr->commonPrefixLen_ = full_cplen;
+      ptr->commonPrefixLen_ = uint32_t(full_cplen);
 
       FileHeader *header = new FileHeader(indexSeq.mem_size());
       header->min_value = minValue;

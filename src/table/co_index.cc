@@ -254,14 +254,14 @@ void MmapRead_FixedLenStrVec(fstring fname, const COIndex::KeyStat& ks,
   TERARK_VERIFY_EQ(mmap.size, ks.minKeyLen * ks.numKeys);
   keyVec.m_size = ks.numKeys;
   if (0 == cplen && ks.minKey < ks.maxKey) {
-    keyVec.m_fixlen = ks.minKeyLen;
+    keyVec.m_fixlen = uint32_t(ks.minKeyLen);
     keyVec.m_strpool_mem_type = MemType::Mmap;
     keyVec.m_strpool.risk_set_data((byte_t*)mmap.base, mmap.size);
     mmap.base = nullptr; // release
   }
   else {
     const size_t keynum = ks.numKeys;
-    const size_t fixdst = keyVec.m_fixlen = ks.minKeyLen - cplen;
+    const size_t fixdst = keyVec.m_fixlen = uint32_t(ks.minKeyLen - cplen);
     const size_t fixsrc = ks.minKeyLen;
     use_hugepage_resize_no_init(&keyVec.m_strpool, fixdst * ks.numKeys);
     auto src = (const byte_t*)mmap.base + cplen;
