@@ -189,14 +189,18 @@ struct NestLoudsTrieIndexBase : public COIndex {
           nltMemSize += len;
         };
         index->SaveMmap(std::ref(getSize));
-        size_t fixlen = ks.minKeyLen - cplen;
+        size_t holeLen = ks.ComputeMiddleHoleLen(cplen);
+        size_t fixlen = ks.minKeyLen - cplen - holeLen;
         size_t fixIndexMemSize = fixlen * ks.numKeys;
         if (nltMemSize > fixIndexMemSize * tzopt.nltAcceptCompressionRatio) {
           if (tzopt.debugLevel >= 2) {
-            STD_INFO("File(%s): fallback to FixedLenKeyIndex for speed", keyFilePath.c_str());
+            if (0 == holeLen)
+              STD_INFO("File(%s): fallback to FixedLenKeyIndex for speed", keyFilePath.c_str());
+            else
+              STD_INFO("File(%s): use FixedLenHoleIndex(%zd) for speed", keyFilePath.c_str(), holeLen);
           }
-          auto fac = GetFactory("FixedLenKeyIndex");
-          TERARK_VERIFY_F(nullptr != fac, "FixedLenKeyIndex");
+          auto fac = GetFactory(holeLen ? "FixedLenHoleIndex" : "FixedLenKeyIndex");
+          TERARK_VERIFY_F(nullptr != fac, "holeLen = %zd", holeLen);
           index->Delete();
           index = fac->Build(keyFilePath, tzopt, ks, iopt);
         }

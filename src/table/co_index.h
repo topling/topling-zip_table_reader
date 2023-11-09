@@ -64,6 +64,13 @@ public:
     // will not be non-empty both
     terark::UintVecMin0 keyOffsets; // if non-empty, Build() will use it
     bool hasFastApproximateRank = true;
+
+    struct ByteHistogram : std::array<uint32_t, 256> {
+      ByteHistogram() { memset(this, 0, sizeof(*this)); }
+    };
+    valvec<ByteHistogram> keyPosHistogram; // for user key without prefix
+    void KeyPosHistogramAddSuffix(fstring suffix);
+    size_t ComputeMiddleHoleLen(size_t cplen) const;
   };
   class Factory : public terark::RefCounter {
   public:

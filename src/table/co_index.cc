@@ -184,6 +184,44 @@ bool COIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   }
 }
 
+bool IsFixedLenHoleIndexEnabled() {
+  static bool enabled = getEnvBool("COIndex_enableFixedLenHoleIndex", false);
+  return enabled;
+}
+
+void COIndex::KeyStat::KeyPosHistogramAddSuffix(fstring suffix) {
+  keyPosHistogram.resize(suffix.size());
+  auto hist = keyPosHistogram.data();
+  for (size_t i = 0; i < suffix.size(); i++) {
+    byte_t b = suffix[i];
+    hist[i][b]++;
+  }
+}
+
+size_t COIndex::KeyStat::ComputeMiddleHoleLen(size_t cplen) const {
+  if (!IsFixedLenHoleIndexEnabled()) {
+    return 0; // let it select FixedLenKeyIndex
+  }
+  TERARK_VERIFY_EQ(cplen, commonPrefixLen(minKey, maxKey));
+  size_t holeLen = 0;
+  for (size_t i = cplen; i < keyPosHistogram.size(); i++) {
+    auto byteHist = keyPosHistogram[i].data();
+    size_t numZeros = 0, lastNonZero = size_t(-1);
+    for (size_t b = 0; b < keyPosHistogram[i].size(); b++) {
+      if (byteHist[b])
+        lastNonZero = b;
+      else
+        numZeros++;
+    }
+    TERARK_VERIFY_NE(lastNonZero, size_t(-1));
+    if (byteHist[lastNonZero] == numKeys) { // all user_key[i] are same
+      holeLen++;
+      TERARK_VERIFY_EQ(numZeros, 255);
+    }
+  }
+  return holeLen;
+}
+
 const COIndex::Factory*
 COIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
@@ -227,8 +265,12 @@ COIndex::SelectFactory(const KeyStat& ks, fstring name) {
       return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
     }
   }
-  if (ks.maxKeyLen == ks.minKeyLen && ks.minKeyLen - cplen <= 8) {
-    return GetFactory("FixedLenKeyIndex");
+  size_t holeLen = ks.ComputeMiddleHoleLen(cplen);
+  if (ks.maxKeyLen == ks.minKeyLen && ks.minKeyLen - cplen - holeLen <= 8) {
+    if (holeLen)
+      return GetFactory("FixedLenHoleIndex");
+    else
+      return GetFactory("FixedLenKeyIndex");
   }
   if (ks.sumKeyLen - ks.numKeys * cplen > 0x1E0000000) { // 7.5G
     return GetFactory("SE_512_64");
