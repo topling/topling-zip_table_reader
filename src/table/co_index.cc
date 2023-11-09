@@ -12,9 +12,9 @@ namespace rocksdb {
 
 using namespace terark;
 
-static bool g_indexEnableFewZero            = getEnvBool("ToplingZipTable_enableFewZero", false);
-static bool g_indexEnableUintIndex          = getEnvBool("ToplingZipTable_enableUintIndex", true);
-static bool g_indexEnableCompositeUintIndex = getEnvBool("ToplingZipTable_enableCompositeUintIndex", false);
+static bool g_indexEnableFewZero            = getEnvBool("COIndex_enableFewZero", false);
+static bool g_indexEnableUintIndex          = getEnvBool("COIndex_enableUintIndex", true);
+static bool g_indexEnableCompositeUintIndex = getEnvBool("COIndex_enableCompositeUintIndex", false);
 
 static auto& GetCOIndexFactroyMap() {
   static hash_strmap<COIndex::FactoryPtr> g_COIndexFactroy;
