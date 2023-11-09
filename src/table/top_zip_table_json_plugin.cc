@@ -196,10 +196,8 @@ struct ToplingZipTableFactory_SerDe : SerDeFunc<TableFactory> {
       dio << static_cast<const ToplingZipTableFactoryState&>(factory);
     }
     else {
-      if (&GetZipServerPID == nullptr) { // without ToplingZipTableBuilder
-        if (0 == g_startupTime)
-          g_startupTime = g_pf.now();
-      }
+      if (0 == g_startupTime)
+        g_startupTime = g_pf.now();
       std::unique_lock<std::mutex> lock(factory.mtx_); // need lock
       dio << factory.level_zip_size_;
     }
@@ -250,13 +248,13 @@ json JS_TopZipTable_Global_Stat(bool html) {
   if (&GetZipServerPID == nullptr) {
     if (html)
       return json::object({
-        { "sumKeyLen", ToStr("%.3f GB", g_sumKeyLen/1e9) },
-        { "sumValueLen", ToStr("%.3f GB", g_sumValueLen/1e9) },
-        { "sumUserKeyLen", ToStr("%.3f GB", g_sumUserKeyLen/1e9) },
-        { "sumUserKeyNum", ToStr("%.6f M", g_sumUserKeyNum/1e6) },
-        { "sumEntryNum", ToStr("%.6f M", g_sumEntryNum/1e6) },
-        { "writeSpeed+seq", ToStr("%.3f MB/s", (sumlen) / td) },
-        { "writeSpeed-seq", ToStr("%.3f MB/s", (sumlen - g_sumEntryNum * 8)/td) },
+        { "sumKeyLen", SizeToString(g_sumKeyLen) },
+        { "sumValueLen", SizeToString(g_sumValueLen) },
+        { "sumUserKeyLen", SizeToString(g_sumUserKeyLen) },
+        { "sumUserKeyNum", g_sumUserKeyNum },
+        { "sumEntryNum", g_sumEntryNum },
+        { "writeSpeed+seq", ToStr("%.3f MiB/s", (sumlen) / td * (1e6 / (1<<20))) },
+        { "writeSpeed-seq", ToStr("%.3f MiB/s", (sumlen - g_sumEntryNum * 8)/td * (1e6 / (1<<20))) },
       });
     else
       return json::object({
@@ -277,16 +275,16 @@ json JS_TopZipTable_Global_Stat(bool html) {
   }
 if (html)
   return json::object({
-    { "sumWorkingMem", ToStr("%.3f GB", sumWorkingMem/1e9) },
-    { "sumWaitingMem", ToStr("%.3f GB", sumWaitingMem/1e9) },
+    { "sumWorkingMem", SizeToString(sumWorkingMem) },
+    { "sumWaitingMem", SizeToString(sumWaitingMem) },
     { "waitQueueSize", waitQueueSize },
-    { "sumKeyLen", ToStr("%.3f GB", g_sumKeyLen/1e9) },
-    { "sumValueLen", ToStr("%.3f GB", g_sumValueLen/1e9) },
-    { "sumUserKeyLen", ToStr("%.3f GB", g_sumUserKeyLen/1e9) },
-    { "sumUserKeyNum", ToStr("%.6f M", g_sumUserKeyNum/1e6) },
-    { "sumEntryNum", ToStr("%.6f M", g_sumEntryNum/1e6) },
-    { "writeSpeed+seq", ToStr("%.3f MB/s", (sumlen) / td) },
-    { "writeSpeed-seq", ToStr("%.3f MB/s", (sumlen - g_sumEntryNum * 8)/td) },
+    { "sumKeyLen", SizeToString(g_sumKeyLen) },
+    { "sumValueLen", SizeToString(g_sumValueLen) },
+    { "sumUserKeyLen", SizeToString(g_sumUserKeyLen) },
+    { "sumUserKeyNum", g_sumUserKeyNum },
+    { "sumEntryNum", g_sumEntryNum },
+    { "writeSpeed+seq", ToStr("%.3f MiB/s", (sumlen) / td * (1e6 / (1<<20))) },
+    { "writeSpeed-seq", ToStr("%.3f MiB/s", (sumlen - g_sumEntryNum * 8)/td * (1e6 / (1<<20))) },
     { "zipServerPID", zip_server_pid },
   });
 else
