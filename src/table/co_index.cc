@@ -14,7 +14,11 @@ using namespace terark;
 
 static bool g_indexEnableFewZero            = getEnvBool("COIndex_enableFewZero", false);
 static bool g_indexEnableUintIndex          = getEnvBool("COIndex_enableUintIndex", true);
+#if 0
 static bool g_indexEnableCompositeUintIndex = getEnvBool("COIndex_enableCompositeUintIndex", false);
+#else
+static bool g_indexEnableCompositeUintIndex = false; // unconditionally disable
+#endif
 
 static auto& GetCOIndexFactroyMap() {
   static hash_strmap<COIndex::FactoryPtr> g_COIndexFactroy;
