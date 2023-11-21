@@ -46,30 +46,11 @@ public:
     extern bool IsFixedLenHoleIndexEnabled();
     TERARK_VERIFY(IsFixedLenHoleIndexEnabled());
     TERARK_VERIFY_EQ(cplen, commonPrefixLen(ks.minKey, ks.maxKey));
-    TERARK_VERIFY_EQ(ks.minKey.size(), ks.keyPosHistogram.size());
+    TERARK_VERIFY_EQ(cplen + ks.holeMeta.size(), ks.maxKeyLen);
     uint16_t* holeMeta = MutableHoleMeta();
-    size_t holeLen = 0;
-    for (size_t i = cplen; i < ks.keyPosHistogram.size(); i++) {
-      auto byteHist = ks.keyPosHistogram[i].data();
-      size_t numZeros = 0, lastNonZero = size_t(-1);
-      for (size_t b = 0; b < ks.keyPosHistogram[i].size(); b++) {
-        if (byteHist[b])
-          lastNonZero = b;
-        else
-          numZeros++;
-      }
-      TERARK_VERIFY_NE(lastNonZero, size_t(-1));
-      if (byteHist[lastNonZero] == ks.numKeys) { // all user_key[i] are same
-        holeLen++;
-        TERARK_VERIFY_EQ(numZeros, 255);
-        holeMeta[i - cplen] = key_data_with_holes[i]; // set the hole byte
-      }
-      else {
-        holeMeta[i - cplen] = 0xFFFF; // not a hole
-      }
-    }
+    memcpy(holeMeta, ks.holeMeta.data(), ks.holeMeta.used_mem_size());
     m_suffixLen = ks.minKey.size() - cplen;
-    m_keys.m_fixlen = m_suffixLen - holeLen;
+    m_keys.m_fixlen = m_suffixLen - ks.holeLen;
   }
 
   void PopulateIndexContent(const FixedLenStrVec& keysWithHoles) {
@@ -441,7 +422,7 @@ public:
     size_t full_cplen = ks.prefix.size() + cplen;
     size_t suffix_len = ks.minKey.size() - cplen;
     size_t key_meta_size = KeyMetaSize(full_cplen, suffix_len);
-    TERARK_VERIFY_GT(ks.ComputeMiddleHoleLen(cplen), 0);
+    TERARK_VERIFY_GT(ks.holeLen, 0);
     auto raw = malloc(sizeof(FixedLenHoleIndex) + key_meta_size);
     auto fix = new(raw)FixedLenHoleIndex();
     COIndexUP fix_up(fix); // guard

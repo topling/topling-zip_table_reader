@@ -57,21 +57,16 @@ public:
     size_t maxKeyLen = 0;
     size_t sumKeyLen = 0;
     size_t numKeys   = 0;
+    size_t holeLen   = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;
     valvec<byte_t> prefix; // fixed-len prefix
+    valvec<uint16_t> holeMeta;
 
     // will not be non-empty both
     terark::UintVecMin0 keyOffsets; // if non-empty, Build() will use it
     bool hasFastApproximateRank = true;
-
-    struct ByteHistogram : std::array<uint32_t, 256> {
-      ByteHistogram() { memset(this, 0, sizeof(*this)); }
-    };
-    valvec<ByteHistogram> keyPosHistogram; // for user key without prefix
     bool IsFixedLen() const { return minKeyLen == maxKeyLen; }
-    void KeyPosHistogramAddSuffix(fstring suffix);
-    size_t ComputeMiddleHoleLen(size_t cplen) const;
   };
   class Factory : public terark::RefCounter {
   public:

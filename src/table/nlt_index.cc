@@ -189,7 +189,7 @@ struct NestLoudsTrieIndexBase : public COIndex {
           nltMemSize += len;
         };
         index->SaveMmap(std::ref(getSize));
-        size_t holeLen = ks.ComputeMiddleHoleLen(cplen);
+        size_t holeLen = ks.holeLen;
         size_t fixlen = ks.minKeyLen - cplen - holeLen;
         size_t fixIndexMemSize = fixlen * ks.numKeys;
         if (nltMemSize > fixIndexMemSize * tzopt.nltAcceptCompressionRatio) {
