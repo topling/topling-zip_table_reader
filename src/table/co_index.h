@@ -69,6 +69,7 @@ public:
       ByteHistogram() { memset(this, 0, sizeof(*this)); }
     };
     valvec<ByteHistogram> keyPosHistogram; // for user key without prefix
+    bool IsFixedLen() const { return minKeyLen == maxKeyLen; }
     void KeyPosHistogramAddSuffix(fstring suffix);
     size_t ComputeMiddleHoleLen(size_t cplen) const;
   };
