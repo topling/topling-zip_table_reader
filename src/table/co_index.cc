@@ -189,7 +189,7 @@ bool COIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
 }
 
 bool IsFixedLenHoleIndexEnabled() {
-  static bool enabled = getEnvBool("COIndex_enableFixedLenHoleIndex", false);
+  static bool enabled = getEnvBool("COIndex_enableFixedLenHoleIndex", true);
   return enabled;
 }
 
