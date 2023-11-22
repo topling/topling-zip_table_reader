@@ -319,7 +319,7 @@ protected:
   uint32_t m_suffix_len;
   uint32_t m_pref_len;
   uint32_t m_fixlen;
-  uint32_t m_total_len;
+  uint32_t m_padding;
   byte_t m_key_data[0];
 
   inline bool Done(size_t id) {
@@ -347,15 +347,15 @@ public:
     m_fixlen = index->m_keys.m_fixlen;
     m_num = index->NumKeys();
     m_pref_len = index->m_commonPrefixLen;
-    m_total_len = m_pref_len + index->m_suffixLen;
+    m_padding = 0;
+    size_t full_key_len = m_pref_len + index->m_suffixLen;
     memcpy(m_key_data, index->m_commonPrefixData, m_pref_len);
     for (size_t i = 0; i < m_suffix_len; i++) { // fill hole
       if (m_hole_meta[i] < 256) {
         m_key_data[m_pref_len + i] = byte_t(m_hole_meta[i]);
       }
     }
-    // m_total_len is redundant, it is same as m_key.n, don't change, KISS
-    m_key = fstring(m_key_data, m_total_len);
+    m_key = fstring(m_key_data, full_key_len);
   }
   void Delete() override { free(this); }
   bool SeekToFirst() override { return Done(0); }
