@@ -207,10 +207,10 @@ public:
     fstring suffix = key.substr(pref_len);
     size_t  lo = this->lower_bound_prefix(suffix);
     if (lo < m_keys.m_size) {
-      const fstring hit_key = m_keys[lo];
       if (suffix.size() > m_suffixLen) {
+        const fstring hit_key = m_keys[lo];
         const uint16_t* holeMeta = GetHoleMeta();
-        int cmp = SuffixCompare(hit_key.udata(), suffix.udata(), hit_key.size(), holeMeta);
+        int cmp = SuffixCompare(hit_key.udata(), suffix.udata(), m_suffixLen, holeMeta);
         if (0 == cmp) {
           ++lo;
         }
