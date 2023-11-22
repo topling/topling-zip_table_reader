@@ -347,7 +347,7 @@ public:
     m_fixlen = index->m_keys.m_fixlen;
     m_num = index->NumKeys();
     m_pref_len = index->m_commonPrefixLen;
-    m_total_len = m_pref_len + index->m_keys.m_fixlen;
+    m_total_len = m_pref_len + index->m_suffixLen;
     memcpy(m_key_data, index->m_commonPrefixData, m_pref_len);
     for (size_t i = 0; i < m_suffix_len; i++) { // fill hole
       if (m_hole_meta[i] < 256) {
@@ -406,7 +406,7 @@ public:
   size_t DictRank() const override { return m_id; }
 };
 COIndex::Iterator* FixedLenHoleIndex::NewIterator() const {
-  auto ikey_cap = std::max<size_t>(m_commonPrefixLen + m_keys.m_fixlen + 8, 64u);
+  auto ikey_cap = std::max<size_t>(m_commonPrefixLen + m_suffixLen + 8, 64u);
   auto mem = (char*)malloc(sizeof(Iter) + ikey_cap);
   memset(mem + sizeof(Iter), 0, ikey_cap);
   return new(mem)Iter(this);
