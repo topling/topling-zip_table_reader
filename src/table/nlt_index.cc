@@ -168,6 +168,14 @@ struct NestLoudsTrieIndexBase : public COIndex {
       size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(ks.numKeys + 1, sumRealKeyLen);
       return indexSize + sumRealKeyLen;
     }
+    static size_t ComputeMemSize(const COIndex* index) {
+        size_t memSize = 0;
+        auto getSize = [&](const void*, size_t len) {
+          memSize += len;
+        };
+        index->SaveMmap(std::ref(getSize));
+        return memSize;
+    }
     COIndex* Build(const std::string& keyFilePath,
                        const ToplingZipTableOptions& tzopt,
                        const KeyStat& ks,
@@ -184,11 +192,7 @@ struct NestLoudsTrieIndexBase : public COIndex {
           MmapRead_FixedLenStrVec(keyFilePath, ks, keyVec);
           index = VirtBuild(tzopt, keyVec, conf);
         }
-        size_t nltMemSize = 0;
-        auto getSize = [&](const void*, size_t len) {
-          nltMemSize += len;
-        };
-        index->SaveMmap(std::ref(getSize));
+        size_t nltMemSize = ComputeMemSize(index);
         size_t holeLen = ks.holeLen;
         size_t fixlen = ks.minKeyLen - cplen - holeLen;
         size_t fixIndexMemSize = fixlen * ks.numKeys;
