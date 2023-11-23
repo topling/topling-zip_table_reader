@@ -65,6 +65,9 @@ public:
 
     // will not be non-empty both
     terark::UintVecMin0 keyOffsets; // if non-empty, Build() will use it
+    bool enableCompositeUintIndex = false; // will copy ToplingZipTableOptions
+    bool enableFixedLenHoleIndex  = false; // will copy ToplingZipTableOptions
+    bool enableUintIndex          = true ; // will copy ToplingZipTableOptions
     bool hasFastApproximateRank = true;
     bool IsFixedLen() const { return minKeyLen == maxKeyLen; }
   };

@@ -43,8 +43,7 @@ public:
 
   void PopulateHoles(const COIndex::KeyStat& ks, size_t cplen,
                      const byte_t* key_data_with_holes) {
-    extern bool IsFixedLenHoleIndexEnabled();
-    TERARK_VERIFY(IsFixedLenHoleIndexEnabled());
+    TERARK_VERIFY(ks.enableFixedLenHoleIndex);
     TERARK_VERIFY_EQ(cplen, commonPrefixLen(ks.minKey, ks.maxKey));
     TERARK_VERIFY_EQ(cplen + ks.holeMeta.size(), ks.maxKeyLen);
     uint16_t* holeMeta = MutableHoleMeta();

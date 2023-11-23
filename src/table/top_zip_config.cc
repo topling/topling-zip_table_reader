@@ -289,6 +289,13 @@ bool ToplingZipTableOptionsFromEnv(ToplingZipTableOptions& tzo) {
   MyGetInt (tzo, recordsPerBatch     );
   //MyGetXiB (tzo, maxRawKeyValueBytes );
 
+  MyGetBool(tzo, enableApproximateKeyAnchors);
+  MyGetBool(tzo, enableCompositeUintIndex);
+  MyGetBool(tzo, enableFixedLenHoleIndex);
+  MyGetBool(tzo, enableUintIndex);
+  MyGetBool(tzo, preadUseRocksdbFS);
+  MyGetInt (tzo, needCompactMaxLevel);
+
   return true;
 }
 

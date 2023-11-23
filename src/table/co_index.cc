@@ -13,12 +13,6 @@ namespace rocksdb {
 using namespace terark;
 
 static bool g_indexEnableFewZero            = getEnvBool("COIndex_enableFewZero", false);
-static bool g_indexEnableUintIndex          = getEnvBool("COIndex_enableUintIndex", true);
-#if 0
-static bool g_indexEnableCompositeUintIndex = getEnvBool("COIndex_enableCompositeUintIndex", false);
-#else
-static bool g_indexEnableCompositeUintIndex = false; // unconditionally disable
-#endif
 
 static auto& GetCOIndexFactroyMap() {
   static hash_strmap<COIndex::FactoryPtr> g_COIndexFactroy;
@@ -188,17 +182,12 @@ bool COIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   }
 }
 
-bool IsFixedLenHoleIndexEnabled() {
-  static bool enabled = getEnvBool("COIndex_enableFixedLenHoleIndex", true);
-  return enabled;
-}
-
 const COIndex::Factory*
 COIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   size_t ceLen = 0; // cost effective index1st len if any
-  if (g_indexEnableUintIndex &&
+  if (ks.enableUintIndex &&
       ks.maxKeyLen == ks.minKeyLen &&
       ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
@@ -219,7 +208,8 @@ COIndex::SelectFactory(const KeyStat& ks, fstring name) {
       }
     }
   }
-  if (g_indexEnableCompositeUintIndex &&
+  if (ks.enableCompositeUintIndex &&
+      false && // disable now
       ks.maxKeyLen == ks.minKeyLen &&
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&

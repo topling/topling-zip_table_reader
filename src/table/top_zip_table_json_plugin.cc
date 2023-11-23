@@ -70,6 +70,9 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     fileWriterBufferSize = (int)terark::__hsm_align_pow2(fileWriterBufferSize);
     ROCKSDB_JSON_OPT_SIZE(js, fixedLenIndexCacheLeafSize);
     ROCKSDB_JSON_OPT_PROP(js, enableApproximateKeyAnchors);
+    ROCKSDB_JSON_OPT_PROP(js, enableCompositeUintIndex);
+    ROCKSDB_JSON_OPT_PROP(js, enableFixedLenHoleIndex);
+    ROCKSDB_JSON_OPT_PROP(js, enableUintIndex);
     ROCKSDB_JSON_OPT_PROP(js, preadUseRocksdbFS);
     ROCKSDB_JSON_OPT_PROP(js, needCompactMaxLevel);
   }
@@ -113,6 +116,9 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     //ROCKSDB_JSON_SET_SIZE(djs, maxRawKeyValueBytes);
     ROCKSDB_JSON_SET_SIZE(djs, fixedLenIndexCacheLeafSize);
     ROCKSDB_JSON_SET_PROP(djs, enableApproximateKeyAnchors);
+    ROCKSDB_JSON_SET_PROP(djs, enableCompositeUintIndex);
+    ROCKSDB_JSON_SET_PROP(djs, enableFixedLenHoleIndex);
+    ROCKSDB_JSON_SET_PROP(djs, enableUintIndex);
     ROCKSDB_JSON_SET_PROP(djs, preadUseRocksdbFS);
     ROCKSDB_JSON_SET_PROP(djs, needCompactMaxLevel);
     return djs;
