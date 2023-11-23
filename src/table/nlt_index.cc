@@ -199,7 +199,7 @@ struct NestLoudsTrieIndexBase : public COIndex {
         if (nltMemSize > fixIndexMemSize * tzopt.nltAcceptCompressionRatio) {
           if (tzopt.debugLevel >= 2) {
             if (0 == holeLen)
-              STD_INFO("File(%s): fallback to FixedLenKeyIndex for speed", keyFilePath.c_str());
+              STD_INFO("File(%s): use FixedLenKeyIndex for speed", keyFilePath.c_str());
             else
               STD_INFO("File(%s): use FixedLenHoleIndex(%zd) for speed", keyFilePath.c_str(), holeLen);
           }
