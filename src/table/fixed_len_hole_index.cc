@@ -48,8 +48,8 @@ public:
     TERARK_VERIFY_EQ(cplen + ks.holeMeta.size(), ks.maxKeyLen);
     uint16_t* holeMeta = MutableHoleMeta();
     memcpy(holeMeta, ks.holeMeta.data(), ks.holeMeta.used_mem_size());
-    m_suffixLen = ks.minKey.size() - cplen;
-    m_keys.m_fixlen = m_suffixLen - ks.holeLen;
+    m_suffixLen = uint32_t(ks.minKey.size() - cplen);
+    m_keys.m_fixlen = uint32_t(m_suffixLen - ks.holeLen);
   }
 
   void PopulateIndexContent(const FixedLenStrVec& keysWithHoles) {
