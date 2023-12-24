@@ -338,6 +338,9 @@ public:
   void SetupForCompaction() override;
   virtual void SetupForRandomRead() = 0; // revert SetupForCompaction
   Status DumpTable(WritableFile* /*out_file*/) override;
+  bool IsMyFactory(const TableFactory* fac) const final {
+    return fac == table_factory_;
+  }
 
   void SetCompressionOptions(const ToplingZipSubReader* subs, size_t num) {
     auto props = this->table_properties_.get();
