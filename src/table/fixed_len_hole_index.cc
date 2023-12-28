@@ -22,7 +22,7 @@ public:
   static constexpr char index_name[] = "FixedLenHoleIndex";
   DaCacheFixedStrVec m_keys;
   uint32_t m_commonPrefixLen;
-  uint32_t m_suffixLen;
+  uint32_t m_suffixLen; // = m_keys.m_fixlen + holeLen
 
   struct Header : ToplingIndexHeader {
     uint32_t suffixLen;
