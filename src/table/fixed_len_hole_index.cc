@@ -438,8 +438,8 @@ public:
     fix->PopulateHoles(ks, cplen, fixed_keys.data());
     fix->PopulateIndexContent(fixed_keys);
     if (tzopt.fixedLenIndexCacheLeafSize >= 64) {
-      #define FMT "FixedLenHoleIndex build_cache: num_keys %zd, fixlen %zd, prefix %zd, cplen %zd, suffix %d(hole %zd)"
-      #define ARG ks.numKeys, ks.minKeyLen, ks.prefix.size(), cplen, fix->m_suffixLen, ks.holeLen
+      #define FMT "FixedLenHoleIndex build_cache: num_keys %zd, prefix %zd, fixlen %zd, cplen %zd, suffix %d(hole %zd)"
+      #define ARG ks.numKeys, ks.prefix.size(), ks.minKeyLen, cplen, fix->m_suffixLen, ks.holeLen
       ROCKS_LOG_DEBUG(iopt->info_log, FMT, ARG);
       auto t0 = g_pf.now();
       fix->m_keys.build_cache(tzopt.fixedLenIndexCacheLeafSize);
