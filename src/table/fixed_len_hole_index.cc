@@ -439,12 +439,12 @@ public:
     fix->PopulateIndexContent(fixed_keys);
     if (tzopt.fixedLenIndexCacheLeafSize >= 64) {
       #define FMT "FixedLenHoleIndex build_cache: num_keys %zd, fixlen %zd, prefix %zd, cplen %zd, suffix %d(hole %zd)"
-      #define ARG ks.numKeys, ks.minKeyLen, ks.prefix.size(), cplen, fix->m_suffixLen, fix->m_suffixLen - full_cplen
+      #define ARG ks.numKeys, ks.minKeyLen, ks.prefix.size(), cplen, fix->m_suffixLen, ks.holeLen
       ROCKS_LOG_DEBUG(iopt->info_log, FMT, ARG);
       auto t0 = g_pf.now();
       fix->m_keys.build_cache(tzopt.fixedLenIndexCacheLeafSize);
       auto t1 = g_pf.now();
-      ROCKS_LOG_INFO(iopt->info_log, FMT ", time = %.3f sec", ARG, g_pf.sf(t0, t1));
+      ROCKS_LOG_INFO(iopt->info_log, FMT ", time %.3f sec", ARG, g_pf.sf(t0, t1));
     }
     fix_up.release(); // must release
     return fix;
