@@ -2891,6 +2891,7 @@ const try {
   void PrintVersionHashInfo(rocksdb::Logger*);
   void PrintVersionHashInfo(const std::shared_ptr<rocksdb::Logger>&);
   PrintVersionHashInfo(tro.ioptions.info_log);
+  auto t0 = g_pf.now();
   Footer footer;
   Slice file_data;
   auto file = file_up.get();
@@ -2899,10 +2900,16 @@ const try {
   if (!s.ok()) {
     return s;
   }
+  auto t1 = g_pf.now();
   if (WarmupLevel::kValue == table_options_.warmupLevel) {
     MmapAdvSeq(file_data);
     MmapWarmUp(file_data);
   }
+  auto t2 = g_pf.now();
+  ROCKS_LOG_DEBUG(tro.ioptions.info_log,
+      "NewTableReader(%s): mmap %.3f ms, warmup(%s) %.3f ms",
+      file->file_name().c_str(), g_pf.mf(t0,t1),
+      enum_cstr(table_options_.warmupLevel), g_pf.mf(t1,t2));
   s = ReadFooterFromFile(IOOptions(), file, nullptr, file_size, &footer);
   if (!s.ok()) {
     return s;
