@@ -12,6 +12,7 @@
 #include <terark/io/DataIO.hpp>
 #include <terark/num_to_str.hpp>
 #include <terark/util/process.hpp>
+#include <float.h>
 
 #ifndef _MSC_VER
 const char* git_version_hash_info_topling_zip_table_reader();
@@ -27,9 +28,9 @@ namespace rocksdb {
 
 struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
   ToplingZipTableOptions_Json(const json& js, const SidePluginRepo& repo) {
-    Update(js);
+    Update(js, true);
   }
-  void Update(const json& js) {
+  void Update(const json& js, bool is_init = false) {
     ROCKSDB_JSON_OPT_PROP(js, indexNestLevel);
     ROCKSDB_JSON_OPT_PROP(js, checksumLevel);
     ROCKSDB_JSON_OPT_ENUM(js, entropyAlgo);
@@ -48,8 +49,31 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     ROCKSDB_JSON_OPT_PROP(js, nltAcceptCompressionRatio);
     ROCKSDB_JSON_OPT_PROP(js, estimateCompressionRatio);
     ROCKSDB_JSON_OPT_PROP(js, keyRankCacheRatio);
-    ROCKSDB_JSON_OPT_PROP(js, sampleRatio);
-    ROCKSDB_JSON_OPT_PROP(js, sampleRatioMultiplier);
+    if (auto iter = js.find("sampleRatio"); js.end() != iter) {
+      const json& value = iter.value();
+      if (is_init) {
+        if (value.is_number_float())
+          sampleRatio = {value.get<double>()};
+        else if (value.is_array())
+          ROCKSDB_JSON_OPT_PROP(js, sampleRatio);
+        else
+          THROW_InvalidArgument("sampleRatio must be an float number or an float number array");
+      } else {
+        if (value.is_number_float()) {
+          double dval = value.get<double>();
+          for (double& elem : sampleRatio) elem = dval;
+        } else if (value.is_array()) { // be thread safe
+          std::vector<double> sampleRatio; // NOLINT, hide this->sampleRatio
+          ROCKSDB_JSON_OPT_PROP(js, sampleRatio);
+          size_t n = std::min(this->sampleRatio.size(), sampleRatio.size());
+          for (size_t i = 0; i < n; i++) {
+            if (double dval = sampleRatio[i]; dval > FLT_EPSILON)
+              this->sampleRatio[i] = dval;
+          }
+        } else
+          THROW_InvalidArgument("sampleRatio must be an float number or an float number array");
+      }
+    }
     ROCKSDB_JSON_OPT_PROP(js, localTempDir);
     ROCKSDB_JSON_OPT_PROP(js, indexType);
     ROCKSDB_JSON_OPT_SIZE(js, softZipWorkingMemLimit);
@@ -96,8 +120,13 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     ROCKSDB_JSON_SET_PROP(djs, nltAcceptCompressionRatio);
     ROCKSDB_JSON_SET_PROP(djs, estimateCompressionRatio);
     ROCKSDB_JSON_SET_PROP(djs, keyRankCacheRatio);
-    ROCKSDB_JSON_SET_PROP(djs, sampleRatio);
-    ROCKSDB_JSON_SET_PROP(djs, sampleRatioMultiplier);
+    if (sampleRatio.size() == 1) {
+      djs["sampleRatio"] = sampleRatio[0];
+    } else {
+      ROCKSDB_JSON_SET_PROP(djs, sampleRatio);
+      if (sampleRatio.empty())
+        THROW_InvalidArgument("sampleRatio must not be empty");
+    }
     ROCKSDB_JSON_SET_PROP(djs, localTempDir);
     ROCKSDB_JSON_SET_PROP(djs, indexType);
     ROCKSDB_JSON_SET_SIZE(djs, softZipWorkingMemLimit);

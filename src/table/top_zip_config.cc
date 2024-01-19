@@ -274,7 +274,11 @@ bool ToplingZipTableOptionsFromEnv(ToplingZipTableOptions& tzo) {
   MyGetBool  (tzo, compressGlobalDict      );
 
   MyGetDouble(tzo, estimateCompressionRatio);
-  MyGetDouble(tzo, sampleRatio             );
+  if (tzo.sampleRatio.size() == 1) {
+    tzo.sampleRatio[0] = terark::getEnvDouble("ToplingZipTable_sampleRatio", tzo.sampleRatio[0]);
+  } else {
+    STD_WARN("existing sampleRatio.size() must be 1, but is %zd, ignored", tzo.sampleRatio.size());
+  }
   MyGetDouble(tzo, indexCacheRatio         );
 
   MyGetInt(tzo, minPreadLen);

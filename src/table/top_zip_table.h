@@ -68,8 +68,7 @@ struct ToplingZipTableOptions {
   float          nltAcceptCompressionRatio = 0.4f;
   float          estimateCompressionRatio = 0.2f;
   float          keyRankCacheRatio        = 0.0f;
-  double         sampleRatio              = 0.03;
-  double         sampleRatioMultiplier    = 1.0;
+  std::vector<double> sampleRatio         = {0.03};
   std::string    localTempDir             = "/tmp";
   std::string    indexType                = "Mixed_XL_256_32_FL";
 
