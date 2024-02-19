@@ -187,7 +187,11 @@ class UintIndex : public UintIndexBase {
     // extra 8 bytes for KeyTag(SeqNum & ValueType)
     // 64u is for speed up read key access: callers may read beyond ikey mem
     auto ikey_cap = std::max(commonPrefixLen_ + keyLength_ + 8, 64u);
+   #if defined(_MSC_VER)
     auto mem = (char*)malloc(sizeof(MyBaseIterator) + ikey_cap);
+   #else
+    auto mem = (char*)aligned_alloc(64, pow2_align_up(sizeof(MyBaseIterator) + ikey_cap, 64));
+   #endif
     memset(mem + sizeof(MyBaseIterator), 0, ikey_cap);
     return mem;
   }
@@ -393,7 +397,11 @@ public:
     }
     COIndex* loadImpl(fstring mem, fstring fpath) const {
       auto header = (const FileHeader*)(mem.data());
+     #if defined(_MSC_VER)
       auto raw = malloc(align_up(sizeof(UintIndex) + header->common_prefix_length, 16));
+     #else
+      auto raw = aligned_alloc(64, align_up(sizeof(UintIndex) + header->common_prefix_length, 64));
+     #endif
       auto ptr = new(raw)UintIndex();
       COIndexUP ptr_up(ptr); // guard
       loadCommonPart(ptr, sizeof(UintIndex), mem, fpath);

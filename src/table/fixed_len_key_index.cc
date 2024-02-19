@@ -280,7 +280,11 @@ public:
 };
 COIndex::Iterator* FixedLenKeyIndex::NewIterator() const {
   auto ikey_cap = std::max<size_t>(m_commonPrefixLen + m_keys.m_fixlen + 8, 64u);
+ #if defined(_MSC_VER)
   auto mem = (char*)malloc(sizeof(Iter) + ikey_cap);
+ #else
+  auto mem = (char*)aligned_alloc(64, pow2_align_up(sizeof(Iter) + ikey_cap, 64));
+ #endif
   memset(mem + sizeof(Iter), 0, ikey_cap);
   switch (m_keys.m_fixlen) {
 #define case_of(SuffixLen) \
@@ -321,7 +325,11 @@ public:
                      const ImmutableOptions* iopt) const override {
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     size_t full_cplen = ks.prefix.size() + cplen;
+   #if defined(_MSC_VER)
     auto raw = malloc(sizeof(FixedLenKeyIndex) + full_cplen);
+   #else
+    auto raw = aligned_alloc(64, pow2_align_up(sizeof(FixedLenKeyIndex) + full_cplen, 64));
+   #endif
     auto fix = new(raw)FixedLenKeyIndex();
     COIndexUP fix_up(fix); // guard
     MmapRead_FixedLenStrVec(keyFilePath, ks, fix->m_keys);

@@ -55,7 +55,11 @@ public:
     //    1. NestLoudsTrieIter
     //    2. TrieDAWG Iterator
     size_t iter_mem_size = sizeof(NestLoudsTrieIter) + trie->iter_mem_size();
+   #if defined(_MSC_VER)
     auto iter = (NestLoudsTrieIter*)malloc(iter_mem_size);
+   #else
+    auto iter = (NestLoudsTrieIter*)aligned_alloc(64, pow2_align_up(iter_mem_size, 64));
+   #endif
     new(iter)NestLoudsTrieIter(); // init m_id and v-table
     trie->cons_iter(iter + 1); // cons TrieDAWG Iterator
     return iter;
