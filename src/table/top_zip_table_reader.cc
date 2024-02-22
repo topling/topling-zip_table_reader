@@ -57,6 +57,10 @@
   #define IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(Then, Else) Else
 #endif
 
+#if !defined(TOPLINGDB_WARMUP_ZERO_COPY)
+  #define TryWarmupZeroCopy(buf, min_prefault_pages)
+#endif
+
 namespace rocksdb {
 
 using namespace terark;
@@ -533,7 +537,9 @@ public:
   IterScanFN                iter_next_;
   IterScanFN                iter_prev_;
 #endif
+#if defined(TOPLINGDB_WARMUP_ZERO_COPY)
   uint32_t                  min_prefault_pages_;
+#endif
   SequenceNumber            global_tag_;
   Status                    status_;
   size_t                    seek_cnt_ = 0;
@@ -603,7 +609,9 @@ public:
     iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
    #endif
     iter_->SetInvalid();
+   #if defined(TOPLINGDB_WARMUP_ZERO_COPY)
     min_prefault_pages_ = ro.min_prefault_pages;
+   #endif
     tag_rs_kind_ = subReader->tag_rs_kind_;
     pinned_iters_mgr_ = static_cast<PinnedIteratorsManager*>(&dummy_pin_mgr_);
     rs_bitpos_ = -1;
