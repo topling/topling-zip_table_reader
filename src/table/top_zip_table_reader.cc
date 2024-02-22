@@ -514,6 +514,10 @@ struct OneValuePerUK : public Base {
   static constexpr uint32_t value_index_ = 0;
   static constexpr bool is_one_value_per_uk = true;
 };
+#if !defined(_MSC_VER)
+typedef bool (*IterScanFN)(COIndex::Iterator*);
+#pragma GCC diagnostic ignored "-Wpmf-conversions"
+#endif
 template<class IterOpt>
 class ToplingZipTableIterBase : public IterOpt {
 public:
@@ -525,6 +529,10 @@ public:
   const ToplingZipSubReader* subReader_;
   PinnedIteratorsManager*   pinned_iters_mgr_;
   COIndex::Iterator*        iter_;
+#if !defined(_MSC_VER)
+  IterScanFN                iter_next_;
+  IterScanFN                iter_prev_;
+#endif
   uint32_t                  min_prefault_pages_;
   SequenceNumber            global_tag_;
   Status                    status_;
@@ -590,6 +598,10 @@ public:
     table_reader_ = r;
     subReader_ = subReader;
     iter_ = subReader_->index_->NewIterator();
+   #if !defined(_MSC_VER)
+    iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
+    iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
+   #endif
     iter_->SetInvalid();
     min_prefault_pages_ = ro.min_prefault_pages;
     tag_rs_kind_ = subReader->tag_rs_kind_;
@@ -601,6 +613,13 @@ public:
     as_atomic(r->live_iter_num_).fetch_add(1, std::memory_order_relaxed);
     as_atomic(f->cumu_iter_num).fetch_add(1, std::memory_order_relaxed);
     as_atomic(f->live_iter_num).fetch_add(1, std::memory_order_relaxed);
+  }
+
+  inline bool IndexIterInvokeNext() {
+    return TERARK_IF_MSVC(iter_->Next(), iter_next_(iter_));
+  }
+  inline bool IndexIterInvokePrev() {
+    return TERARK_IF_MSVC(iter_->Prev(), iter_prev_(iter_));
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) final {
@@ -1125,15 +1144,15 @@ protected:
   }
   inline bool IndexIterPrev() {
     if (reverse)
-      return iter_->Next();
+      return this->IndexIterInvokeNext();
     else
-      return iter_->Prev();
+      return this->IndexIterInvokePrev();
   }
   inline bool IndexIterNext() {
     if (reverse)
-      return iter_->Prev();
+      return this->IndexIterInvokePrev();
     else
-      return iter_->Next();
+      return this->IndexIterInvokeNext();
   }
 };
 
@@ -1233,6 +1252,10 @@ protected:
     iter_->Delete();
     iter_ = nullptr; //< for exception by NewIterator
     iter_ = subReader->index_->NewIterator();
+   #if !defined(_MSC_VER)
+    this->iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
+    this->iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
+   #endif
     invalidate_offsets_cache();
   }
   bool IndexIterSeekToFirst() override {
@@ -1257,7 +1280,7 @@ protected:
   }
   inline bool IndexIterPrev() {
     if (reverse) {
-      if (iter_->Next())
+      if (this->IndexIterInvokeNext())
         return true;
       if (subReader_ == reader()->LastSubReader())
         return false;
@@ -1265,7 +1288,7 @@ protected:
       return iter_->SeekToFirst();
     }
     else {
-      if (iter_->Prev())
+      if (this->IndexIterInvokePrev())
         return true;
       if (subReader_ == reader()->GetSubReader(0))
         return false;
@@ -1275,7 +1298,7 @@ protected:
   }
   inline bool IndexIterNext() {
     if (reverse) {
-      if (iter_->Prev())
+      if (this->IndexIterInvokePrev())
         return true;
       if (subReader_ == reader()->GetSubReader(0))
         return false;
@@ -1283,7 +1306,7 @@ protected:
       return iter_->SeekToLast();
     }
     else {
-      if (iter_->Next())
+      if (this->IndexIterInvokeNext())
         return true;
       if (subReader_ == reader()->LastSubReader())
         return false;
