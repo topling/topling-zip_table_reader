@@ -406,8 +406,12 @@ public:
   size_t DictRank() const override { return m_id; }
 };
 COIndex::Iterator* FixedLenHoleIndex::NewIterator() const {
-  auto ikey_cap = std::max<size_t>(m_commonPrefixLen + m_suffixLen + 8, 64u);
+  auto ikey_cap = align_up(m_commonPrefixLen + m_suffixLen + 8, 8);
+ #if defined(_MSC_VER)
   auto mem = (char*)malloc(sizeof(Iter) + ikey_cap);
+ #else
+  auto mem = (char*)aligned_alloc(CACHE_LINE_SIZE, align_up(sizeof(Iter) + ikey_cap, CACHE_LINE_SIZE));
+ #endif
   memset(mem + sizeof(Iter), 0, ikey_cap);
   return new(mem)Iter(this);
 }
