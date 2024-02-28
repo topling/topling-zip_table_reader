@@ -324,9 +324,9 @@ protected:
   inline bool Done(size_t id) {
     // TODO: use _mm_mask_blend_epi8, CPUID Flags: AVX512BW + AVX512VL
     auto src = m_fixed_data + m_fixlen * id;
-    __builtin_prefetch(src);
+    //__builtin_prefetch(src);
     auto holeMeta = m_hole_meta;
-    __builtin_prefetch(holeMeta);
+    //__builtin_prefetch(holeMeta);
     m_id = id;
     auto dst = m_key_data + m_pref_len;
     size_t suffixLen = m_suffix_len;
