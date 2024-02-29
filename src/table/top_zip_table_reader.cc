@@ -221,7 +221,6 @@ struct ToplingZipSubReader {
   size_t StoreDataSize() const;
 
   void GetRecordAppend(size_t recId, valvec<byte_t>* tbuf, bool async) const;
-  void IterGetRecordAppend(size_t recId, BlobStore::CacheOffsets*) const;
 
   Status Get(const ReadOptions&, SequenceNumber, const Slice& key, GetContext*) const;
   size_t ApproximateRank(fstring key) const;
@@ -533,7 +532,18 @@ public:
   const ToplingZipSubReader* subReader_;
   PinnedIteratorsManager*   pinned_iters_mgr_;
   COIndex::Iterator*        iter_;
-#if !defined(_MSC_VER)
+  const BlobStore*          store_; // to speed up IterGetRecordAppend
+  BlobStore::get_record_append_CacheOffsets_func_t get_record_append_;
+#if defined(_MSC_VER) || defined(__clang__)
+  terark_forceinline
+  void IterGetRecordAppend(size_t recId, BlobStore::CacheOffsets* co) {
+    (store_->*get_record_append_)(recId, co);
+  }
+#else
+  terark_forceinline
+  void IterGetRecordAppend(size_t recId, BlobStore::CacheOffsets* co) {
+    get_record_append_(store_, recId, co);
+  }
   IterScanFN                iter_next_;
   IterScanFN                iter_prev_;
 #endif
@@ -604,6 +614,8 @@ public:
     table_reader_ = r;
     subReader_ = subReader;
     iter_ = subReader_->index_->NewIterator();
+    store_ = subReader->store_.get();
+    get_record_append_ = store_->m_get_record_append_CacheOffsets;
    #if !defined(_MSC_VER)
     iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
     iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
@@ -817,11 +829,11 @@ public:
       size_t valueId = rs_bitpos_ + value_index_;
       TryPinBuffer(value_buf);
      #if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
-      subReader_->IterGetRecordAppend(valueId, cache_offsets());
+      IterGetRecordAppend(valueId, cache_offsets());
       TryWarmupZeroCopy(value_buf, min_prefault_pages_);
      #else
       try {
-        subReader_->IterGetRecordAppend(valueId, cache_offsets());
+        IterGetRecordAppend(valueId, cache_offsets());
         TryWarmupZeroCopy(value_buf, min_prefault_pages_);
       }
       catch (const std::exception& ex) { // crc checksum error
@@ -859,11 +871,11 @@ public:
       value_buf.resize_no_init(mulnum_size);
     }
    #if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
-    subReader_->IterGetRecordAppend(recId, cache_offsets());
+    IterGetRecordAppend(recId, cache_offsets());
     TryWarmupZeroCopy(value_buf, min_prefault_pages_);
    #else
     try {
-      subReader_->IterGetRecordAppend(recId, cache_offsets());
+      IterGetRecordAppend(recId, cache_offsets());
       TryWarmupZeroCopy(value_buf, min_prefault_pages_);
     }
     catch (const std::exception& ex) { // crc checksum error
@@ -1260,6 +1272,8 @@ protected:
     iter_->Delete();
     iter_ = nullptr; //< for exception by NewIterator
     iter_ = subReader->index_->NewIterator();
+    this->store_ = subReader->store_.get();
+    this->get_record_append_ = this->store_->m_get_record_append_CacheOffsets;
    #if !defined(_MSC_VER)
     this->iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
     this->iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
@@ -1596,12 +1610,6 @@ const {
     perf_context.block_read_time += ns; // use this metric as zbs read nanos
     stats->recordInHistogram(READ_ZBS_RECORD_MICROS, ns / 1000);
   }
-}
-
-terark_forceinline
-void ToplingZipSubReader::IterGetRecordAppend(size_t recId, BlobStore::CacheOffsets* co)
-const {
-  store_->get_record_append(recId, co);
 }
 
 Status ToplingZipSubReader::Get(const ReadOptions& read_options,
