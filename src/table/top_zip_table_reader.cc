@@ -612,19 +612,10 @@ public:
     : global_tag_(PackSequenceAndType(global_seqno, kTypeValue))
   {
     table_reader_ = r;
-    subReader_ = subReader;
-    iter_ = subReader_->index_->NewIterator();
-    store_ = subReader->store_.get();
-    get_record_append_ = store_->m_get_record_append_CacheOffsets;
-   #if !defined(_MSC_VER)
-    iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
-    iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
-   #endif
-    iter_->SetInvalid();
+    SetSubReader(subReader);
    #if defined(TOPLINGDB_WARMUP_ZERO_COPY)
     min_prefault_pages_ = ro.min_prefault_pages;
    #endif
-    tag_rs_kind_ = subReader->tag_rs_kind_;
     pinned_iters_mgr_ = static_cast<PinnedIteratorsManager*>(&dummy_pin_mgr_);
     rs_bitpos_ = -1;
 //  zip_value_type_ = ZipValueType(255); // NOLINT
@@ -633,6 +624,18 @@ public:
     as_atomic(r->live_iter_num_).fetch_add(1, std::memory_order_relaxed);
     as_atomic(f->cumu_iter_num).fetch_add(1, std::memory_order_relaxed);
     as_atomic(f->live_iter_num).fetch_add(1, std::memory_order_relaxed);
+  }
+
+  void SetSubReader(const ToplingZipSubReader* sub) {
+    subReader_ = sub;
+    iter_ = sub->index_->NewIterator();
+    store_ = sub->store_.get();
+    get_record_append_ = store_->m_get_record_append_CacheOffsets;
+   #if !defined(_MSC_VER)
+    iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
+    iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
+   #endif
+    tag_rs_kind_ = sub->tag_rs_kind_;
   }
 
   inline bool IndexIterInvokeNext() {
@@ -1264,20 +1267,12 @@ protected:
       valvec<byte_t>().swap(this->ValueBuf());
     else
       this->ValueBuf().risk_release_ownership();
-    subReader_ = subReader;
-    this->tag_rs_kind_ = subReader->tag_rs_kind_;
     if constexpr (!reverse && !IterOpt::is_one_value_per_uk) {
       this->value_count_ = 0; // set invalid
     }
     iter_->Delete();
     iter_ = nullptr; //< for exception by NewIterator
-    iter_ = subReader->index_->NewIterator();
-    this->store_ = subReader->store_.get();
-    this->get_record_append_ = this->store_->m_get_record_append_CacheOffsets;
-   #if !defined(_MSC_VER)
-    this->iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
-    this->iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
-   #endif
+    this->SetSubReader(subReader);
     invalidate_offsets_cache();
   }
   bool IndexIterSeekToFirst() override {
