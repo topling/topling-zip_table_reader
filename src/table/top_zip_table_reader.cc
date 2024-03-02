@@ -741,7 +741,7 @@ public:
   virtual void invalidate_offsets_cache() noexcept = 0;
 
   void TryPinBuffer(valvec<byte_t>& buf) {
-    if (buf.capacity()) { // check capacity first for speed zero copy
+    if (UNLIKELY(buf.capacity())) { // check capacity first for speed zero copy
       if (!buf.empty()) {
         if (pinned_iters_mgr_->PinningEnabled()) {
           pinned_iters_mgr_->PinPtr(buf.data(), free);
@@ -820,15 +820,19 @@ public:
   }
   inline bool FetchValueRS() {
     assert(!is_value_loaded_);
-    auto op = ValueType(iter_->key().end()[0]); // ValueType byte
     auto& value_buf = ValueBuf();
+   #if 0
+    auto op = ValueType(iter_->key().end()[0]); // ValueType byte
     if (kTypeDeletion == op || kTypeSingleDeletion == op) {
       if constexpr (is_legacy_zv) {
         this->user_value_ = "";
       } else {
         value_buf.risk_set_size(0);
       }
-    } else {
+    }
+    else
+   #endif
+    {
       size_t valueId = rs_bitpos_ + value_index_;
       TryPinBuffer(value_buf);
      #if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
