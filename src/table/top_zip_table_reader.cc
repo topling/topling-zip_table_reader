@@ -532,7 +532,7 @@ public:
   const ToplingZipSubReader* subReader_;
   PinnedIteratorsManager*   pinned_iters_mgr_;
   COIndex::Iterator*        iter_;
-  const AbstractBlobStore*  store_; // to speed up IterGetRecordAppend
+  const BlobStore*          store_; // to speed up IterGetRecordAppend
   BlobStore::get_record_append_CacheOffsets_func_t get_record_append_;
 #if defined(_MSC_VER) || defined(__clang__)
   terark_forceinline
@@ -563,11 +563,7 @@ public:
   };
   TagRsKind                 tag_rs_kind_;
   bool is_value_loaded_ = false;
-  bool is_seqscan_ : 1;
-  bool is_zero_copy_ : 1;
-  bool per_value_checksum_ : 1;
-  bool is_fast_value_load_ : 1;
-  bool try_catch_load_value_ : 1;
+  bool is_seqscan_ = false;
   PinIterMgrBase dummy_pin_mgr_;
   static_assert(sizeof(dummy_pin_mgr_) == 1);
 
@@ -617,12 +613,12 @@ public:
   {
     table_reader_ = r;
     SetSubReader(subReader);
-    is_seqscan_ = false;
    #if defined(TOPLINGDB_WARMUP_ZERO_COPY)
     min_prefault_pages_ = ro.min_prefault_pages;
    #endif
     pinned_iters_mgr_ = static_cast<PinnedIteratorsManager*>(&dummy_pin_mgr_);
     rs_bitpos_ = -1;
+//  zip_value_type_ = ZipValueType(255); // NOLINT
     inc_seqscan(r, ro);
     auto* f = r->table_factory_;
     as_atomic(r->live_iter_num_).fetch_add(1, std::memory_order_relaxed);
@@ -640,11 +636,6 @@ public:
     iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
    #endif
     tag_rs_kind_ = sub->tag_rs_kind_;
-    is_zero_copy_ = sub->zeroCopy_;
-    per_value_checksum_ = store_->get_checksum_level() == 2;
-    is_fast_value_load_ = is_zero_copy_ && !per_value_checksum_;
-    try_catch_load_value_ = per_value_checksum_ &&
-        table_reader_->table_factory_->table_options_.debugLevel > 0;
   }
 
   inline bool IndexIterInvokeNext() {
@@ -840,23 +831,23 @@ public:
     } else {
       size_t valueId = rs_bitpos_ + value_index_;
       TryPinBuffer(value_buf);
-      if (IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(1, !try_catch_load_value_)) {
+     #if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
+      IterGetRecordAppend(valueId, cache_offsets());
+      TryWarmupZeroCopy(value_buf, min_prefault_pages_);
+     #else
+      try {
         IterGetRecordAppend(valueId, cache_offsets());
         TryWarmupZeroCopy(value_buf, min_prefault_pages_);
-      } else {
-        try {
-          IterGetRecordAppend(valueId, cache_offsets());
-          TryWarmupZeroCopy(value_buf, min_prefault_pages_);
-        }
-        catch (const std::exception& ex) { // crc checksum error
-          if (table_reader_->table_factory_->table_options_.debugLevel > 0) {
-            ROCKSDB_DIE("ex.what = %s", ex.what());
-          }
-          SetIterInvalid();
-          status_ = Status::Corruption("IterGetRecordAppend()", ex.what());
-          return false;
-        }
       }
+      catch (const std::exception& ex) { // crc checksum error
+        if (table_reader_->table_factory_->table_options_.debugLevel > 0) {
+          ROCKSDB_DIE("ex.what = %s", ex.what());
+        }
+        SetIterInvalid();
+        status_ = Status::Corruption("IterGetRecordAppend()", ex.what());
+        return false;
+      }
+     #endif
       if constexpr (is_legacy_zv) {
         this->user_value_ = SliceOf(value_buf);
       }
@@ -882,23 +873,23 @@ public:
       value_buf.ensure_capacity(subReader_->estimateUnzipCap_ + mulnum_size);
       value_buf.resize_no_init(mulnum_size);
     }
-    if (IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(1, !try_catch_load_value_)) {
+   #if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
+    IterGetRecordAppend(recId, cache_offsets());
+    TryWarmupZeroCopy(value_buf, min_prefault_pages_);
+   #else
+    try {
       IterGetRecordAppend(recId, cache_offsets());
       TryWarmupZeroCopy(value_buf, min_prefault_pages_);
-    } else {
-      try {
-        IterGetRecordAppend(recId, cache_offsets());
-        TryWarmupZeroCopy(value_buf, min_prefault_pages_);
-      }
-      catch (const std::exception& ex) { // crc checksum error
-        if (table_reader_->table_factory_->table_options_.debugLevel > 0) {
-          ROCKSDB_DIE("ex.what = %s", ex.what());
-        }
-        SetIterInvalid();
-        status_ = Status::Corruption("IterGetRecordAppend()", ex.what());
-        return false;
-      }
     }
+    catch (const std::exception& ex) { // crc checksum error
+      if (table_reader_->table_factory_->table_options_.debugLevel > 0) {
+        ROCKSDB_DIE("ex.what = %s", ex.what());
+      }
+      SetIterInvalid();
+      status_ = Status::Corruption("IterGetRecordAppend()", ex.what());
+      return false;
+    }
+   #endif
     if (!IterOpt::is_one_value_per_uk && ZipValueType::kMulti == zip_value_type_) {
       if (value_buf.capacity() == 0) {
         TERARK_VERIFY(subReader_->zeroCopy_);
