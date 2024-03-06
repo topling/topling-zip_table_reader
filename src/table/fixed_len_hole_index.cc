@@ -50,6 +50,17 @@ public:
     memcpy(holeMeta, ks.holeMeta.data(), ks.holeMeta.used_mem_size());
     m_suffixLen = uint32_t(ks.minKey.size() - cplen);
     m_keys.m_fixlen = uint32_t(m_suffixLen - ks.holeLen);
+    PopulateHoleFill();
+  }
+  void PopulateHoleFill() {
+    uint16_t* holeMeta = MutableHoleMeta();
+    uint16_t* holeFill = holeMeta + m_suffixLen;
+    for (size_t f = 0, i = 0; i < m_suffixLen; i++) {
+      if (holeMeta[i] >= 256) {
+        holeFill[f] = uint16_t(i);
+        f++;
+      }
+    }
   }
 
   void PopulateIndexContent(const FixedLenStrVec& keysWithHoles) {
@@ -72,6 +83,8 @@ public:
     }
     m_keys.optimize_func();
   }
+
+  const uint16_t* GetHoleFill() const { return GetHoleMeta() + m_suffixLen; }
 
   const uint16_t* GetHoleMeta() const {
     size_t aligned = pow2_align_up(m_commonPrefixLen, 2);
@@ -324,16 +337,15 @@ protected:
   inline bool Done(size_t id) {
     // TODO: use _mm_mask_blend_epi8, CPUID Flags: AVX512BW + AVX512VL
     auto src = m_fixed_data + m_fixlen * id;
-    //__builtin_prefetch(src);
-    auto holeMeta = m_hole_meta;
-    //__builtin_prefetch(holeMeta);
+    auto holeFill = m_hole_meta + m_suffix_len;
     m_id = id;
     auto dst = m_key_data + m_pref_len;
-    size_t suffixLen = m_suffix_len;
-    for (size_t i = 0, j = 0; i < suffixLen; i++) {
-      if (holeMeta[i] >= 256) {
-        dst[i] = src[j++];
-      }
+    size_t fixlen = m_fixlen;
+    ROCKSDB_ASSUME(fixlen > 0);
+    for (size_t i = 0; i < fixlen; i++) {
+      size_t j = holeFill[i];
+      ROCKSDB_ASSERT_GE(m_hole_meta[j], 256);
+      dst[j] = src[i];
     }
     return true;
   }
@@ -426,6 +438,7 @@ public:
     size_t full_cplen = ks.prefix.size() + cplen;
     size_t suffix_len = ks.minKey.size() - cplen;
     size_t key_meta_size = KeyMetaSize(full_cplen, suffix_len);
+    key_meta_size += sizeof(uint16_t) * suffix_len; // HoleFill, needs fixlen
     TERARK_VERIFY_GT(ks.holeLen, 0);
     auto raw = malloc(sizeof(FixedLenHoleIndex) + key_meta_size);
     auto fix = new(raw)FixedLenHoleIndex();
@@ -471,7 +484,8 @@ public:
     size_t num = header->reserved_102_24;
     size_t key_meta_size = KeyMetaSize(pref_len, suffix_len);
     size_t meta_size = align_up(sizeof(Header) + key_meta_size, 16);
-    auto raw = malloc(sizeof(FixedLenHoleIndex) + key_meta_size);
+    size_t buff_size = key_meta_size + sizeof(uint16_t) * fixlen;
+    auto raw = malloc(sizeof(FixedLenHoleIndex) + buff_size);
     auto fix = new(raw)FixedLenHoleIndex();
     fix->m_header = header;
     fix->m_num_keys = num;
@@ -481,6 +495,7 @@ public:
     fix->m_keys.load_mmap((byte_t*)mem.p + meta_size, header->file_size - meta_size);
     TERARK_VERIFY_EQ(fixlen, fix->m_keys.m_fixlen);
     TERARK_VERIFY_EQ(num, fix->m_keys.m_size);
+    fix->PopulateHoleFill();
     return COIndexUP(fix);
   }
 };
