@@ -226,12 +226,20 @@ COIndex::SelectFactory(const KeyStat& ks, fstring name) {
       return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
     }
   }
+ #if 0
+  // NLT can compress much better, in tpcc, NLT compress bmsql_oorder_idx1 to
+  // 6.1%, FixedLenHoleIndex compress to 33%, and NLT speed is ~50% of
+  // FixedLenHoleIndex, iter scan 55ns vs 26ns per key, this is acceptable, so
+  // FixedLenHoleIndex should not be selected here. We disable this code to
+  // postpone the index selection after NLT build, if NLT compression ratio
+  // is bad, then select FixedLenHoleIndex or FixedLenKeyIndex.
   if (ks.maxKeyLen == ks.minKeyLen && ks.minKeyLen - cplen - ks.holeLen <= 8) {
     if (ks.holeLen)
       return GetFactory("FixedLenHoleIndex");
     else
       return GetFactory("FixedLenKeyIndex");
   }
+ #endif
   if (ks.sumKeyLen - ks.numKeys * cplen > 0x1E0000000) { // 7.5G
     return GetFactory("SE_512_64");
   }
