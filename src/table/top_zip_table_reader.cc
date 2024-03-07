@@ -160,7 +160,7 @@ struct ToplingZipSubReader {
   FSRandomAccessFile* storeFileObj_;
   Statistics* stats_;
   size_t storeOffset_;
-  fstring prefix() const { return fstring(prefix_data_, prefix_len_); }
+  Slice prefix() const { return {(const char*)prefix_data_, prefix_len_}; }
   COIndexUP index_;
   unique_ptr<AbstractBlobStore> store_;
   ZTagArray tags_array_;
@@ -1213,7 +1213,7 @@ public:
       return;
     }
     ResetIter(subReader);
-    if (!fstring(pikey.user_key).startsWith(subReader->prefix())) {
+    if (!pikey.user_key.starts_with(subReader->prefix())) {
       if (reverse)
         SeekToAscendingLast();
       else
@@ -2857,7 +2857,7 @@ json ToplingZipTableMultiReader::ToWebViewJson(const json& dump_options) const {
     if (sub.prefix_len_ <= 8 && 0) {
       // TODO:
     } else {
-      strhtml.append(SliceOf(sub.prefix()).hex());
+      strhtml.append(sub.prefix().hex());
     }
     strhtml.append("</td>");
     double raw_key_size = sub.index_->TotalKeySize();
