@@ -517,7 +517,10 @@ struct OneValuePerUK : public Base {
   static constexpr uint32_t value_index_ = 0;
   static constexpr bool is_one_value_per_uk = true;
 };
-#if !defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__clang__)
+  #define IF_BOUND_PMF(Then, Else) Else
+#else
+  #define IF_BOUND_PMF(Then, Else) Then
 typedef bool (*IterScanFN)(COIndex::Iterator*);
 #pragma GCC diagnostic ignored "-Wpmf-conversions"
 #endif
@@ -631,7 +634,8 @@ public:
     iter_ = sub->index_->NewIterator();
     store_ = sub->store_.get();
     get_record_append_ = store_->m_get_record_append_CacheOffsets;
-   #if !defined(_MSC_VER)
+   #if defined(_MSC_VER) || defined(__clang__)
+   #else
     iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
     iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
    #endif
@@ -639,10 +643,10 @@ public:
   }
 
   inline bool IndexIterInvokeNext() {
-    return TERARK_IF_MSVC(iter_->Next(), iter_next_(iter_));
+    return IF_BOUND_PMF(iter_next_(iter_), iter_->Next());
   }
   inline bool IndexIterInvokePrev() {
-    return TERARK_IF_MSVC(iter_->Prev(), iter_prev_(iter_));
+    return IF_BOUND_PMF(iter_prev_(iter_), iter_->Prev());
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) final {
