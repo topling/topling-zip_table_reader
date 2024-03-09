@@ -1672,9 +1672,11 @@ const {
         // do nothing
       }
       else { // fetch value
+       #if 0 // DictZipBlobStore will reserve memory, others are accurate alloc
         if (read_options.async_io || storeUsePread_ || !zeroCopy_) {
           buf.reserve(estimateUnzipCap_);
         }
+       #endif
         GetRecordAppend(valueId, &buf, read_options.async_io);
         TryWarmupZeroCopy(buf, read_options.min_prefault_pages);
       }
