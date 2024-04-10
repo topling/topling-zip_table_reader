@@ -336,6 +336,7 @@ protected:
 
   inline bool Done(size_t id) {
     // TODO: use _mm_mask_blend_epi8, CPUID Flags: AVX512BW + AVX512VL
+    // TODO: use _mm_mask_storeu_epi8, CPUID Flags: AVX512BW + AVX512VL
     auto src = m_fixed_data + m_fixlen * id;
     auto holeFill = m_hole_meta + m_suffix_len;
     m_id = id;
