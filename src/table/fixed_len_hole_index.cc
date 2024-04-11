@@ -341,7 +341,17 @@ public:
   char   m_commonPrefixData[0]; // must be last field
 };
 
-#if defined(ROCKSDB_UNIT_TEST) && !(defined(__AVX512VL__) && defined(__AVX512VBMI2__))
+#if defined(ROCKSDB_UNIT_TEST) || !defined(NDEBUG)
+static const bool g_useAVX512 = terark::getEnvBool("FixedLenHoleIndexUseAVX512");
+#else
+  #if defined(__AVX512VL__) && defined(__AVX512VBMI2__)
+    static constexpr bool g_useAVX512 = true;
+  #else
+    static constexpr bool g_useAVX512 = false;
+  #endif
+#endif
+
+#if !(defined(__AVX512VL__) && defined(__AVX512VBMI2__))
 union u256 {
   __m256i i;
   unsigned char b[32];
@@ -361,8 +371,6 @@ void emu_mm256_mask_storeu_epi8(void* dst, __mmask32 mask, __m256i src) {
       ((unsigned char*)dst)[i] = u.b[i];
   }
 }
-#define __AVX512VL__ 1
-#define __AVX512VBMI2__ 1
 #define _mm256_maskz_expandloadu_epi8 emu_mm256_maskz_expandloadu_epi8
 #define _mm256_mask_storeu_epi8       emu_mm256_mask_storeu_epi8
 #endif
@@ -383,12 +391,10 @@ protected:
     auto src = m_fixed_data + m_fixlen * id;
     m_id = id;
     auto dst = m_key_data + m_pref_len;
-    size_t fixlen = m_fixlen;
-    ROCKSDB_ASSUME(fixlen > 0);
-   #if defined(__AVX512VL__) && defined(__AVX512VBMI2__)
-    #pragma message "__AVX512VL__ && __AVX512VBMI2__, use _mm256_maskz_expandloadu_epi8"
+   if (g_useAVX512) {
     auto avx_masks = m_avx_masks;
     size_t num_masks = ceiled_div(m_suffix_len, 32);
+    ROCKSDB_ASSUME(num_masks > 0);
     for (size_t i = 0; i < num_masks; i++) {
       auto mask = avx_masks[i];
       auto data = _mm256_maskz_expandloadu_epi8(mask, src);
@@ -396,14 +402,16 @@ protected:
       src += fast_popcount32(mask);
       dst += 32;
     }
-   #else
+   } else {
+    size_t fixlen = m_fixlen;
+    ROCKSDB_ASSUME(fixlen > 0);
     auto holeFill = m_hole_meta + m_suffix_len;
     for (size_t i = 0; i < fixlen; i++) {
       size_t j = holeFill[i];
       ROCKSDB_ASSERT_GE(m_hole_meta[j], 256);
       dst[j] = src[i];
     }
-   #endif
+   }
     return true;
   }
   bool Fail() { m_id = size_t(-1); return false; }
