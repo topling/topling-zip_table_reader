@@ -55,21 +55,22 @@ public:
   void PopulateHoleFill() {
     uint16_t* holeMeta = MutableHoleMeta();
     uint16_t* holeFill = holeMeta + m_suffixLen;
-    for (size_t f = 0, i = 0; i < m_suffixLen; i++) {
+    size_t f = 0;
+    for (size_t i = 0; i < m_suffixLen; i++) {
       if (holeMeta[i] >= 256) {
         holeFill[f] = uint16_t(i);
         f++;
       }
     }
-    uint16_t* holeFillEnd = holeFill + m_keys.m_fixlen;
+    ROCKSDB_VERIFY_EQ(m_keys.m_fixlen, f);
+    uint16_t* holeFillEnd = holeFill + f;
     uint32_t* avxMasks = (uint32_t*)align_up(size_t(holeFillEnd), sizeof(uint32_t));
     ROCKSDB_VERIFY_EQ(avxMasks, GetAvxMasks());
     for (size_t i = 0; i < ceiled_div(m_suffixLen, 32); i++) {
       avxMasks[i] = 0;
     }
-    for (size_t i = 0; i < m_suffixLen; i++) {
-      if (holeMeta[i] >= 256)
-        terark_bit_set1(avxMasks, i);
+    for (size_t i = 0; i < f; i++) {
+      terark_bit_set1(avxMasks, holeFill[i]);
     }
   }
 
