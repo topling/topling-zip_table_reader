@@ -61,6 +61,16 @@ public:
         f++;
       }
     }
+    uint16_t* holeFillEnd = holeFill + m_keys.m_fixlen;
+    uint32_t* avxMasks = (uint32_t*)align_up(size_t(holeFillEnd), sizeof(uint32_t));
+    ROCKSDB_VERIFY_EQ(avxMasks, GetAvxMasks());
+    for (size_t i = 0; i < ceiled_div(m_suffixLen, 32); i++) {
+      avxMasks[i] = 0;
+    }
+    for (size_t i = 0; i < m_suffixLen; i++) {
+      if (holeMeta[i] >= 256)
+        terark_bit_set1(avxMasks, i);
+    }
   }
 
   void PopulateIndexContent(const FixedLenStrVec& keysWithHoles) {
@@ -93,6 +103,13 @@ public:
   uint16_t* MutableHoleMeta() {
     size_t aligned = pow2_align_up(m_commonPrefixLen, 2);
     return (uint16_t*)(m_commonPrefixData + aligned);
+  }
+
+  const uint32_t* GetAvxMasks() const {
+    size_t key_meta_size = KeyMetaSize(m_commonPrefixLen, m_suffixLen);
+    size_t fill_size = sizeof(uint16_t) * m_keys.m_fixlen;
+    size_t buff_size = key_meta_size + fill_size;
+    return (const uint32_t*)(m_commonPrefixData + align_up(buff_size, sizeof(uint32_t)));
   }
 
   // key len has been checked
@@ -323,11 +340,38 @@ public:
   char   m_commonPrefixData[0]; // must be last field
 };
 
+#if defined(ROCKSDB_UNIT_TEST) && !(defined(__AVX512VL__) && defined(__AVX512VBMI2__))
+union u256 {
+  __m256i i;
+  unsigned char b[32];
+};
+__m256i emu_mm256_maskz_expandloadu_epi8(__mmask32 mask, const void* src) {
+  u256 u; memset(&u, 0, sizeof(u));
+  for (size_t f = 0, i = 0; i < 32; i++) {
+    if (mask & (1u << i))
+      u.b[i] = ((unsigned char*)src)[f++];
+  }
+  return u.i;
+}
+void emu_mm256_mask_storeu_epi8(void* dst, __mmask32 mask, __m256i src) {
+  u256 u; u.i = src;
+  for (size_t i = 0; i < 32; i++) {
+    if (mask & (1u << i))
+      ((unsigned char*)dst)[i] = u.b[i];
+  }
+}
+#define __AVX512VL__ 1
+#define __AVX512VBMI2__ 1
+#define _mm256_maskz_expandloadu_epi8 emu_mm256_maskz_expandloadu_epi8
+#define _mm256_mask_storeu_epi8       emu_mm256_mask_storeu_epi8
+#endif
+
 class FixedLenHoleIndex::Iter : public COIndex::FastIter {
 protected:
   const FixedLenHoleIndex* m_index;
   const byte_t* m_fixed_data;
   const uint16_t* m_hole_meta;
+  const uint32_t* m_avx_masks;
   uint32_t m_suffix_len;
   uint32_t m_pref_len;
   uint32_t m_fixlen;
@@ -335,19 +379,30 @@ protected:
   byte_t m_key_data[0];
 
   inline bool Done(size_t id) {
-    // TODO: use _mm_mask_blend_epi8, CPUID Flags: AVX512BW + AVX512VL
-    // TODO: use _mm_mask_storeu_epi8, CPUID Flags: AVX512BW + AVX512VL
     auto src = m_fixed_data + m_fixlen * id;
-    auto holeFill = m_hole_meta + m_suffix_len;
     m_id = id;
     auto dst = m_key_data + m_pref_len;
     size_t fixlen = m_fixlen;
     ROCKSDB_ASSUME(fixlen > 0);
+   #if defined(__AVX512VL__) && defined(__AVX512VBMI2__)
+    #pragma message "__AVX512VL__ && __AVX512VBMI2__, use _mm256_maskz_expandloadu_epi8"
+    auto avx_masks = m_avx_masks;
+    size_t num_masks = ceiled_div(m_suffix_len, 32);
+    for (size_t i = 0; i < num_masks; i++) {
+      auto mask = avx_masks[i];
+      auto data = _mm256_maskz_expandloadu_epi8(mask, src);
+      _mm256_mask_storeu_epi8(dst, mask, data);
+      src += fast_popcount32(mask);
+      dst += 32;
+    }
+   #else
+    auto holeFill = m_hole_meta + m_suffix_len;
     for (size_t i = 0; i < fixlen; i++) {
       size_t j = holeFill[i];
       ROCKSDB_ASSERT_GE(m_hole_meta[j], 256);
       dst[j] = src[i];
     }
+   #endif
     return true;
   }
   bool Fail() { m_id = size_t(-1); return false; }
@@ -357,6 +412,7 @@ public:
     m_fixed_data = index->m_keys.data();
     m_suffix_len = index->m_suffixLen;
     m_hole_meta = index->GetHoleMeta();
+    m_avx_masks = index->GetAvxMasks();
     m_fixlen = index->m_keys.m_fixlen;
     m_num = index->NumKeys();
     m_pref_len = index->m_commonPrefixLen;
@@ -439,9 +495,12 @@ public:
     size_t full_cplen = ks.prefix.size() + cplen;
     size_t suffix_len = ks.minKey.size() - cplen;
     size_t key_meta_size = KeyMetaSize(full_cplen, suffix_len);
-    key_meta_size += sizeof(uint16_t) * suffix_len; // HoleFill, needs fixlen
+    size_t fill_len = suffix_len - ks.holeLen; // will be m_keys.m_fixlen
+    size_t buff_size = key_meta_size + sizeof(uint16_t) * fill_len;
+    size_t mask_size = sizeof(uint32_t) * ceiled_div(suffix_len, 32); // lie after HoleFill
+    size_t over_size = align_up(buff_size, sizeof(uint32_t)) + mask_size;
     TERARK_VERIFY_GT(ks.holeLen, 0);
-    auto raw = malloc(sizeof(FixedLenHoleIndex) + key_meta_size);
+    auto raw = malloc(sizeof(FixedLenHoleIndex) + over_size);
     auto fix = new(raw)FixedLenHoleIndex();
     COIndexUP fix_up(fix); // guard
     FixedLenStrVec fixed_keys;
@@ -456,6 +515,7 @@ public:
     fix->m_num_keys = ks.numKeys;
     fix->PopulateHoles(ks, cplen, fixed_keys.data());
     fix->PopulateIndexContent(fixed_keys);
+    ROCKSDB_VERIFY_EQ(fill_len, fix->m_keys.m_fixlen);
     if (tzopt.fixedLenIndexCacheLeafSize >= 64) {
       #define FMT "FixedLenHoleIndex build_cache: num_keys %zd, prefix %zd, fixlen %zd, cplen %zd, suffix %d(hole %zd)"
       #define ARG ks.numKeys, ks.prefix.size(), ks.minKeyLen, cplen, fix->m_suffixLen, ks.holeLen
@@ -484,15 +544,17 @@ public:
     uint32_t suffix_len = header->suffixLen;
     size_t num = header->reserved_102_24;
     size_t key_meta_size = KeyMetaSize(pref_len, suffix_len);
-    size_t meta_size = align_up(sizeof(Header) + key_meta_size, 16);
     size_t buff_size = key_meta_size + sizeof(uint16_t) * fixlen;
-    auto raw = malloc(sizeof(FixedLenHoleIndex) + buff_size);
+    size_t mask_size = sizeof(uint32_t) * ceiled_div(suffix_len, 32); // lie after HoleFill
+    size_t over_size = align_up(buff_size, sizeof(uint32_t)) + mask_size;
+    auto raw = malloc(sizeof(FixedLenHoleIndex) + over_size);
     auto fix = new(raw)FixedLenHoleIndex();
     fix->m_header = header;
     fix->m_num_keys = num;
     memcpy(fix->m_commonPrefixData, header + 1, key_meta_size);
     fix->m_commonPrefixLen = pref_len;
     fix->m_suffixLen = suffix_len;
+    size_t meta_size = align_up(sizeof(Header) + key_meta_size, 16);
     fix->m_keys.load_mmap((byte_t*)mem.p + meta_size, header->file_size - meta_size);
     TERARK_VERIFY_EQ(fixlen, fix->m_keys.m_fixlen);
     TERARK_VERIFY_EQ(num, fix->m_keys.m_size);
