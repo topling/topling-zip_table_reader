@@ -50,6 +50,13 @@
 #include <linux/mman.h>
 #endif
 
+#if defined(__clang__)
+#elif defined(__GNUC__)
+// 'long long unsigned int ZSTD_getDecompressedSize(const void*, size_t)' is deprecated: Replaced by ZSTD_getFrameContentSize [-Wdeprecated-declarations]
+  #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+  #pragma GCC diagnostic ignored "-Wcast-function-type" // cast ::free
+#endif
+
 //#define TOP_ZIP_TABLE_KEEP_EXCEPTION
 #if defined(TOP_ZIP_TABLE_KEEP_EXCEPTION)
   #define IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(Then, Else) Then
