@@ -341,6 +341,7 @@ public:
   char   m_commonPrefixData[0]; // must be last field
 };
 
+#if defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__x86_64) || defined(__amd64__) || defined(__amd64)
 #if defined(ROCKSDB_UNIT_TEST) || !defined(NDEBUG)
 static const bool g_useAVX512 = terark::getEnvBool("FixedLenHoleIndexUseAVX512");
 #else
@@ -375,6 +376,12 @@ void emu_mm256_mask_storeu_epi8(void* dst, __mmask32 mask, __m256i src) {
 #define _mm256_mask_storeu_epi8       emu_mm256_mask_storeu_epi8
 #endif
 
+#else // not _M_X64
+
+static constexpr bool g_useAVX512 = false;
+
+#endif // _M_X64
+
 class FixedLenHoleIndex::Iter : public COIndex::FastIter {
 protected:
   const FixedLenHoleIndex* m_index;
@@ -392,6 +399,7 @@ protected:
     m_id = id;
     auto dst = m_key_data + m_pref_len;
    if (g_useAVX512) {
+#if defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__x86_64) || defined(__amd64__) || defined(__amd64)
     auto avx_masks = m_avx_masks;
     size_t num_masks = ceiled_div(m_suffix_len, 32);
     ROCKSDB_ASSUME(num_masks > 0);
@@ -402,6 +410,9 @@ protected:
       src += fast_popcount32(mask);
       dst += 32;
     }
+#else
+    ROCKSDB_DIE("Never goes here");
+#endif
    } else {
     size_t fixlen = m_fixlen;
     ROCKSDB_ASSUME(fixlen > 0);
