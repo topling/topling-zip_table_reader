@@ -1,6 +1,12 @@
 //
 // Created by leipeng on 2020/8/5.
 //
+#if defined(_MSC_VER)
+#pragma warning(disable: 4458) // declaration of 'sampleRatio' hides class member
+//#error: _CRT_NONSTDC_NO_DEPRECATE must be defined to use posix functions on Visual C++
+#define _CRT_NONSTDC_NO_DEPRECATE
+#define TERARK_DATA_IO_SLOW_VAR_INT
+#endif
 
 #include <topling/side_plugin_factory.h>
 #include <topling/builtin_table_factory.h>
@@ -11,11 +17,13 @@
 #include <terark/io/FileStream.hpp>
 #include <terark/io/DataIO.hpp>
 #include <terark/num_to_str.hpp>
+#ifndef _MSC_VER
 #include <terark/util/process.hpp>
+#endif
 #include <float.h>
 
-#ifndef _MSC_VER
 const char* git_version_hash_info_topling_zip_table_reader();
+#ifdef HAS_TOPLING_ROCKS
 __attribute__((weak))
 const char* git_version_hash_info_topling_rocks();
 #endif
@@ -177,9 +185,9 @@ size_t g_sumUserKeyNum = 0;
 size_t g_sumEntryNum = 0;
 long long g_startupTime = 0;
 
-__attribute((weak)) extern size_t sumWaitingMem;
-__attribute((weak)) extern size_t sumWorkingMem;
-__attribute((weak)) extern size_t& SyncWaitQueueSize();
+__attribute__((weak)) extern size_t sumWaitingMem;
+__attribute__((weak)) extern size_t sumWorkingMem;
+__attribute__((weak)) extern size_t& SyncWaitQueueSize();
 }
 using namespace tzb_detail;
 
@@ -218,8 +226,10 @@ void ToplingZipTableFactoryState::add(const ToplingZipTableFactoryState& y) {
   level_zip_size_.add(y.level_zip_size_inc_);
 }
 
+#ifndef _MSC_VER
 __attribute__((weak))
 extern pid_t GetZipServerPID();
+#endif
 
 struct ToplingZipTableFactory_SerDe : SerDeFunc<TableFactory> {
   void Serialize(FILE* fp, const TableFactory& base) const override {
@@ -279,8 +289,10 @@ json JS_TopZipTable_Global_Stat(bool html) {
   long long t8 = g_pf.now();
   double td = g_pf.uf(g_startupTime, t8);
   size_t sumlen = g_sumKeyLen + g_sumValueLen;
-
-  if (&GetZipServerPID == nullptr) {
+#ifndef _MSC_VER
+  if (&GetZipServerPID == nullptr)
+#endif
+  {
     if (html)
       return json::object({
         { "sumKeyLen", SizeToString(g_sumKeyLen) },
@@ -300,19 +312,25 @@ json JS_TopZipTable_Global_Stat(bool html) {
         { "sumEntryNum", g_sumEntryNum },
       });
   }
-  pid_t zip_server_pid = GetZipServerPID();
+#ifdef HAS_TOPLING_ROCKS
   auto& waitQueueSize = SyncWaitQueueSize();
+#ifndef _MSC_VER
+  pid_t zip_server_pid = GetZipServerPID();
   if (zip_server_pid > 0) {
     terark::process_obj_read(zip_server_pid,
         g_startupTime, g_sumKeyLen, g_sumValueLen,
         g_sumUserKeyLen, g_sumUserKeyNum, sumWorkingMem, sumWaitingMem,
         g_sumEntryNum, waitQueueSize);
   }
+#endif // _MSC_VER
+#endif // HAS_TOPLING_ROCKS
 if (html)
   return json::object({
+   #ifdef HAS_TOPLING_ROCKS
     { "sumWorkingMem", SizeToString(sumWorkingMem) },
     { "sumWaitingMem", SizeToString(sumWaitingMem) },
     { "waitQueueSize", waitQueueSize },
+   #endif // HAS_TOPLING_ROCKS
     { "sumKeyLen", SizeToString(g_sumKeyLen) },
     { "sumValueLen", SizeToString(g_sumValueLen) },
     { "sumUserKeyLen", SizeToString(g_sumUserKeyLen) },
@@ -320,28 +338,38 @@ if (html)
     { "sumEntryNum", g_sumEntryNum },
     { "writeSpeed+seq", ToStr("%.3f MiB/s", (sumlen) / td * (1e6 / (1<<20))) },
     { "writeSpeed-seq", ToStr("%.3f MiB/s", (sumlen - g_sumEntryNum * 8)/td * (1e6 / (1<<20))) },
+   #if defined(HAS_TOPLING_ROCKS) && !defined(_MSC_VER)
     { "zipServerPID", zip_server_pid },
+   #endif
   });
 else
   return json::object({
+   #ifdef HAS_TOPLING_ROCKS
     { "sumWorkingMem", sumWorkingMem },
     { "sumWaitingMem", sumWaitingMem },
     { "waitQueueSize", waitQueueSize },
+   #endif // HAS_TOPLING_ROCKS
     { "sumKeyLen", g_sumKeyLen },
     { "sumValueLen", g_sumValueLen },
     { "sumUserKeyLen", g_sumUserKeyLen },
     { "sumUserKeyNum", g_sumUserKeyNum },
     { "sumEntryNum", g_sumEntryNum },
+   #if defined(HAS_TOPLING_ROCKS) && !defined(_MSC_VER)
     { "zipServerPID", zip_server_pid },
+   #endif
   });
 }
 
 json JS_TopZipTable_Global_Env() {
+#ifdef HAS_TOPLING_ROCKS
   extern __attribute__((weak)) int GetNltBuildThreads();
   int nltBuildThreads = GetNltBuildThreads ? GetNltBuildThreads() : 0;
+#endif
   return json::object({
     {"DictZipBlobStore_zipThreads", terark::DictZipBlobStore_getZipThreads()},
+  #ifdef HAS_TOPLING_ROCKS
     {"ToplingZipTable_nltBuildThreads", nltBuildThreads},
+  #endif
   });
 }
 
@@ -367,14 +395,18 @@ void JS_ZipTable_AddVersion(json& ver, bool html) {
   if (html) {
     ver["gdzip-reader"] = HtmlGitHref("topling/topling-zip_table_reader",
                          git_version_hash_info_topling_zip_table_reader());
+  #ifdef HAS_TOPLING_ROCKS
     if (git_version_hash_info_topling_rocks) {
       ver["gdzip-builder"] = HtmlGitHref("rockeet/topling-rocks",
                             git_version_hash_info_topling_rocks());
     }
+  #endif
   } else {
     ver["gdzip-reader"] = git_version_hash_info_topling_zip_table_reader();
+  #ifdef HAS_TOPLING_ROCKS
     if (git_version_hash_info_topling_rocks)
       ver["gdzip-builder"] = git_version_hash_info_topling_rocks();
+  #endif
   }
 }
 

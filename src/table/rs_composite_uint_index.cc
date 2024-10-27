@@ -20,6 +20,11 @@
 
 #include "rs_index_common.h"
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4458) // index_ hide class member(intentional)
+  #pragma warning(disable: 4702) // unreachable code
+#endif
+
 namespace rocksdb {
 using namespace terark;
 
@@ -895,7 +900,12 @@ struct CompositeUintIndexBase : public COIndex {
     ushort key1_len_;
     ushort key2_len_;
     const CompositeUintIndexBase& index_; // just for debug
+   #if defined(_MSC_VER)
+    byte_t* get_buffer_ptr() { return (byte_t*)(this + 1); }
+    #define buffer_ get_buffer_ptr()
+   #else
     byte_t buffer_[0];
+   #endif
 
     void Delete() override final {
       // no need to call destructor

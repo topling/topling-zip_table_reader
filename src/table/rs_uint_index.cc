@@ -20,6 +20,10 @@
 
 #include "rs_index_common.h"
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4458) // index_ hide member(intentional)
+#endif
+
 namespace rocksdb {
 using namespace terark;
 
@@ -50,6 +54,9 @@ struct UintIndexBase : public COIndex {
   };
   class MyBaseIterator : public COIndex::FastIter {
   public:
+   #if defined(_MSC_VER)
+    #define buffer_ this->get_buffer()
+   #endif
     #define max_pos_ m_num
     MyBaseIterator(const UintIndexBase& index, const char* commonPrefix) : index_(index) {
       minValue_ = index_.minValue_;
@@ -87,7 +94,12 @@ struct UintIndexBase : public COIndex {
     ushort suff_len_;
     //size_t max_pos_;
     size_t pos_;
+   #if defined(_MSC_VER)
+    byte_t* get_buffer() { return (byte_t*)(this + 1); }
+    const byte_t* get_buffer() const { return (const byte_t*)(this + 1); }
+   #else
     byte_t buffer_[0];
+   #endif
   };
 
   class MyBaseFactory : public COIndex::Factory {
@@ -280,7 +292,9 @@ public:
   class UintIndexIterTmpl : public UintIndexIterator {
   public:
     using UintIndexIterator::UintIndexIterator;
+   #if !defined(_MSC_VER)
     using UintIndexIterator::buffer_;
+   #endif
     using UintIndexIterator::pref_len_;
     using UintIndexIterator::suff_len_;
     using UintIndexIterator::pos_;

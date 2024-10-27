@@ -1,5 +1,8 @@
 #include "co_index.h"
 #include <table/top_table_common.h>
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4245) // convert int to size_t in fsa of cspp
+#endif
 #include <terark/fsa/da_cache_fixed_strvec.hpp>
 #include <terark/io/MemStream.hpp>
 #include "top_zip_internal.h"
@@ -227,8 +230,7 @@ public:
       else
         return m_keys.m_size;
     }
-    int cmp = memcmp(key.p, m_commonPrefixData, pref_len);
-    if (cmp != 0) {
+    if (int cmp = memcmp(key.p, m_commonPrefixData, pref_len); cmp != 0) {
       if (cmp < 0)
         return 0;
       else
@@ -392,7 +394,12 @@ protected:
   uint32_t m_pref_len;
   uint32_t m_fixlen;
   uint32_t m_padding;
+#if defined(_MSC_VER)
+  byte_t* get_key_data_buf() { return (byte_t*)(this + 1); }
+  #define m_key_data get_key_data_buf()
+#else
   byte_t m_key_data[0];
+#endif
 
   inline bool Done(size_t id) {
     auto src = m_fixed_data + m_fixlen * id;
@@ -456,8 +463,7 @@ public:
       else
         return Fail();
     }
-    int cmp = memcmp(key.p, m_key_data, m_pref_len);
-    if (cmp != 0) {
+    if (int cmp = memcmp(key.p, m_key_data, m_pref_len); cmp != 0) {
       if (cmp < 0)
         return Done(0);
       else

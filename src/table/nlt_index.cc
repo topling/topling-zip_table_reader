@@ -1,6 +1,9 @@
 #include "co_index.h"
 #include "top_zip_table.h"
 #include <table/top_table_common.h>
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4245) // convert int to size_t in fsa of cspp
+#endif
 #include <terark/fsa/dfa_mmap_header.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/util/sortable_strvec.hpp>
@@ -18,8 +21,12 @@ void MmapRead_ReadSortedStrVec(fstring, const COIndex::KeyStat&, SortedStrVec&);
 
 struct CheckOffset : StringLexIterator {
   CheckOffset() {
+   #if defined(_MSC_VER) || 0
+    // msvc static_assert false fail
+   #else
     constexpr auto nlt_key_offset = sizeof(COIndex::Iterator) + offsetof(CheckOffset, m_word);
     static_assert(offsetof(COIndex::FastIter, m_key) == nlt_key_offset);
+   #endif
   }
 };
 struct Check_valvec_fstring_layout : valvec<byte_t> {
@@ -270,8 +277,8 @@ struct NestLoudsTrieIndexBase : public COIndex {
   size_t Find(fstring key) const final { return m_dawg->index(key); }
   size_t AccurateRank(fstring key) const final {
     MatchContext ctx;
-    size_t index = -1;
-    size_t dict_rank = -1;
+    size_t index = SIZE_MAX;
+    size_t dict_rank = SIZE_MAX;
     m_dawg->lower_bound(ctx, key, &index, &dict_rank);
     return dict_rank;
   }

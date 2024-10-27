@@ -15,6 +15,11 @@
 #include <topling/builtin_table_factory.h>
 #include <table/top_table_common.h>
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4245) // convert int to size_t in fsa of cspp
+  #pragma warning(disable: 4702) // unreachable code
+#endif
+
 #include <terark/bitfield_array.hpp>
 #include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
@@ -30,7 +35,9 @@
 #include <terark/zbs/dict_zip_blob_store.hpp>
 
 #ifdef _MSC_VER
+#ifndef NOMINMAX
 # define NOMINMAX
+#endif
 # define WIN32_LEAN_AND_MEAN  // We only need minimal includes
 # include <Windows.h>
 # undef min
@@ -71,6 +78,12 @@
 namespace rocksdb {
 
 using namespace terark;
+
+#if defined(_MSC_VER)
+// off_t on msvc is uint32
+intptr_t pread(intptr_t fd, void* buf, size_t len, size_t offset);
+#define fiber_aio_read pread
+#endif
 
 // does not need ROCKSDB_STATIC_TLS
 static thread_local bool g_tls_is_seqscan = false;
@@ -657,7 +670,7 @@ public:
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) final {
-    pinned_iters_mgr_ = pinned_iters_mgr ? :
+    pinned_iters_mgr_ = pinned_iters_mgr ? pinned_iters_mgr :
         static_cast<PinnedIteratorsManager*>(&dummy_pin_mgr_);
   }
 
@@ -2931,6 +2944,8 @@ std::string ToplingZipTableMultiReader::ToWebViewString(const json& dump_options
 }
 
 ///////////////////////////////////////////////////////////////////////////
+void PrintVersionHashInfo(rocksdb::Logger*);
+void PrintVersionHashInfo(const std::shared_ptr<rocksdb::Logger>&);
 Status
 ToplingZipTableFactory::NewTableReader(
               const ReadOptions& ro,
@@ -2939,8 +2954,6 @@ ToplingZipTableFactory::NewTableReader(
               uint64_t file_size, unique_ptr<TableReader>* table,
               bool prefetch_index_and_filter_in_cache)
 const try {
-  void PrintVersionHashInfo(rocksdb::Logger*);
-  void PrintVersionHashInfo(const std::shared_ptr<rocksdb::Logger>&);
   PrintVersionHashInfo(tro.ioptions.info_log);
   auto t0 = g_pf.now();
   Footer footer;

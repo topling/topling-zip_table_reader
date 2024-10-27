@@ -4,6 +4,9 @@
 #include <terark/io/MemStream.hpp>
 #include "top_zip_internal.h"
 #include <topling/json.h>
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4200) // zero len array
+#endif
 
 namespace rocksdb {
 using namespace terark;
@@ -18,6 +21,10 @@ public:
   static constexpr char index_name[] = "FixedLenKeyIndex";
   DaCacheFixedStrVec m_keys;
   uint32_t m_commonPrefixLen;
+
+#if defined(_MSC_VER)
+  #define m_commonPrefixData get_commonPrefixData()
+#endif
 
   struct Header : ToplingIndexHeader {
     uint64_t checksum;
@@ -78,8 +85,7 @@ public:
       else
         return m_keys.m_size;
     }
-    int cmp = memcmp(key.p, m_commonPrefixData, pref_len);
-    if (cmp != 0) {
+    if (int cmp = memcmp(key.p, m_commonPrefixData, pref_len); cmp != 0) {
       if (cmp < 0)
         return 0;
       else
@@ -175,8 +181,13 @@ public:
   #endif
   }
 
+#if defined(_MSC_VER)
+  char* get_commonPrefixData() { return (char*)(this + 1); }
+  const char* get_commonPrefixData() const { return (const char*)(this + 1); }
+#else
   // gcc bug: gcc allows fields after zero len array
   char   m_commonPrefixData[0]; // must be last field
+#endif
 };
 
 class FixedLenKeyIndex::Iter : public COIndex::FastIter {
@@ -185,7 +196,12 @@ protected:
   const byte_t* m_fixed_data;
   uint32_t m_suffix_len;
   uint32_t m_pref_len;
+#if defined(_MSC_VER)
+  byte_t* get_key_data_buf() { return (byte_t*)(this + 1); }
+  #define m_key_data get_key_data_buf()
+#else
   byte_t m_key_data[0];
+#endif
 
   inline bool Done(size_t id) {
     return Done(id, m_suffix_len);
@@ -218,8 +234,7 @@ public:
       else
         return Fail();
     }
-    int cmp = memcmp(key.p, m_key_data, m_pref_len);
-    if (cmp != 0) {
+    if (int cmp = memcmp(key.p, m_key_data, m_pref_len); cmp != 0) {
       if (cmp < 0)
         return Done(0);
       else

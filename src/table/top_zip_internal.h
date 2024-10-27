@@ -166,7 +166,7 @@ public:
         break;
       }
     }
-    dio.write_var_uint64(upper);
+    dio << typename DataIO::my_var_size_t(upper);
     dio.ensureWrite(x.m_fast.data(), sizeof(T) * upper);
     dio << x.m_slow;
   }
