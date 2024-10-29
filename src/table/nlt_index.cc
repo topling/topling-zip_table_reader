@@ -21,12 +21,8 @@ void MmapRead_ReadSortedStrVec(fstring, const COIndex::KeyStat&, SortedStrVec&);
 
 struct CheckOffset : StringLexIterator {
   CheckOffset() {
-   #if defined(_MSC_VER) || 0
-    // msvc static_assert false fail
-   #else
     constexpr auto nlt_key_offset = sizeof(COIndex::Iterator) + offsetof(CheckOffset, m_word);
     static_assert(offsetof(COIndex::FastIter, m_key) == nlt_key_offset);
-   #endif
   }
 };
 struct Check_valvec_fstring_layout : valvec<byte_t> {
