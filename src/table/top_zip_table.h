@@ -78,6 +78,7 @@ struct ToplingZipTableOptions {
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
   size_t minDictZipValueSize = 15;
+  size_t maxSampleLen = 16*1024;
   size_t keyPrefixLen = 0; // for IndexID
 
   // should be a small value, typically 0.001

@@ -289,6 +289,7 @@ bool ToplingZipTableOptionsFromEnv(ToplingZipTableOptions& tzo) {
   MyGetXiB(tzo, hardZipWorkingMemLimit);
   MyGetXiB(tzo, smallTaskMemory);
   MyGetInt(tzo, minDictZipValueSize);
+  MyGetXiB(tzo, maxSampleLen);
 
   MyGetBool(tzo, speedupNestTrieBuild);
   MyGetInt (tzo, bytesPerBatch       );

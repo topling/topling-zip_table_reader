@@ -88,6 +88,7 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     ROCKSDB_JSON_OPT_SIZE(js, hardZipWorkingMemLimit);
     ROCKSDB_JSON_OPT_SIZE(js, smallTaskMemory);
     ROCKSDB_JSON_OPT_SIZE(js, minDictZipValueSize);
+    ROCKSDB_JSON_OPT_SIZE(js, maxSampleLen);
     ROCKSDB_JSON_OPT_PROP(js, keyPrefixLen);
     terark::minimize(keyPrefixLen, MAX_PREFIX_LEN);
     ROCKSDB_JSON_OPT_PROP(js, indexCacheRatio);
@@ -141,6 +142,7 @@ struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
     ROCKSDB_JSON_SET_SIZE(djs, hardZipWorkingMemLimit);
     ROCKSDB_JSON_SET_SIZE(djs, smallTaskMemory);
     ROCKSDB_JSON_SET_SIZE(djs, minDictZipValueSize);
+    ROCKSDB_JSON_SET_SIZE(djs, maxSampleLen);
     ROCKSDB_JSON_SET_PROP(djs, keyPrefixLen);
     ROCKSDB_JSON_SET_PROP(djs, indexCacheRatio);
     ROCKSDB_JSON_SET_PROP(djs, minPreadLen);
