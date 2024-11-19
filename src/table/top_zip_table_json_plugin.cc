@@ -34,6 +34,19 @@ TERARK_DLL_EXPORT int DictZipBlobStore_getZipThreads();
 
 namespace rocksdb {
 
+#ifdef HAS_TOPLING_ROCKS
+  // When HAS_TOPLING_ROCKS was defined, it is enterprise version, in this
+  // case, AutoStartZipServer is defined in topling_zip_table_builder.cc
+  // which is in https://github.com/topling/topling-rocks
+#else
+  // When HAS_TOPLING_ROCKS was not defined, it means this file was compiled
+  // as community version, thus it can not be linked with enterprise version,
+  // link error like `duplicate symbol AutoStartZipServer` will be issued!
+  void AutoStartZipServer() {
+    STD_WARN("Community version has no ToplingZipTableBuilder & ZipServer\n");
+  }
+#endif
+
 struct ToplingZipTableOptions_Json : ToplingZipTableOptions {
   ToplingZipTableOptions_Json(const json& js, const SidePluginRepo& repo) {
     Update(js, true);
