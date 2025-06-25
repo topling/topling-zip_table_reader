@@ -574,6 +574,7 @@ struct ToplingZipTableFactory_Manip : PluginManipFunc<TableFactory> {
         oss|"user_key_num "    |t->user_key_num    |"\n";
         oss|"internal_key_len "|t->internal_key_len|"\n";
         oss|"internal_key_num "|t->internal_key_num|"\n";
+        TOPLING_GCC_NOLINT(-Wredundant-move);
         return std::move(oss);
       }
       json djs;
