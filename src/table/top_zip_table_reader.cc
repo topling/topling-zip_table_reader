@@ -1705,8 +1705,8 @@ const {
         TryWarmupZeroCopy(buf, read_options.min_prefault_pages);
       }
       Slice val((const char*)buf.data(), buf.size());
-      if (read_options.pinning_tls || buf.capacity()) {
-        // pinning_tls indicate SST is pinned by pinned SuperVersion, thus it
+      if (read_options.internal_is_in_pinning_section || buf.capacity()) {
+        // internal_is_in_pinning_section indicate SST is pinned by pinned SuperVersion, thus it
         // is safe to expose mmap memory to user code
         if (!get_context->SaveValue(pikey, val, DeferFree(std::move(buf)))) {
           break;
@@ -1747,7 +1747,7 @@ const {
       pinnerObj.RegisterCleanup(clean, buf.data(), nullptr);
       pinner = &pinnerObj;
       buf.risk_set_capacity(0); // instruct valvec::~valvec() do not free mem
-    } else if (read_options.pinning_tls) {
+    } else if (read_options.internal_is_in_pinning_section) {
       pinner = &pinnerObj;
     }
   };
