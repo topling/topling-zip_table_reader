@@ -2487,6 +2487,11 @@ if (LegacyZvType != sub.tag_rs_kind_ && RS_Key0_Tag0 != sub.tag_rs_kind_) {
 std::string ToplingZipTableReader::ToWebViewString(const json& dump_options) const {
   bool html = JsonSmartBool(dump_options, "html", true);
   json djs;
+  djs["document"] =
+    "<a href='https://github.com/topling/sideplugin-wiki-en/wiki/ToplingZipTable'>Document(English)</a>"
+    " | "
+    "<a href='https://github.com/topling/rockside/wiki/ToplingZipTable'>文档（中文）</a>"
+    ;
   djs["Props.User"] = TableUserPropsToJson(
     table_properties_->user_collected_properties, dump_options);
 
@@ -2766,6 +2771,11 @@ void ToplingZipTableMultiReader::SetupForRandomRead() {
 json ToplingZipTableMultiReader::ToWebViewJson(const json& dump_options) const {
   bool html = JsonSmartBool(dump_options, "html", true);
   json djs;
+  djs["document"] =
+    "<a href='https://github.com/topling/sideplugin-wiki-en/wiki/ToplingZipTable'>Document(English)</a>"
+    " | "
+    "<a href='https://github.com/topling/rockside/wiki/ToplingZipTable'>文档（中文）</a>"
+    ;
   if (!dump_options.contains("part")) {
     djs["Props.User"] = TableUserPropsToJson(
       table_properties_->user_collected_properties, dump_options);
