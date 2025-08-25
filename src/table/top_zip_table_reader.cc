@@ -82,6 +82,9 @@ using namespace terark;
 #if defined(_MSC_VER)
 // off_t on msvc is uint32
 intptr_t pread(intptr_t fd, void* buf, size_t len, size_t offset);
+#endif
+
+#if defined(_MSC_VER) || defined(__ANDROID__)
 #define fiber_aio_read pread
 #endif
 
