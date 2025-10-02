@@ -435,4 +435,14 @@ fstring COIndex::ResidentMemory() const noexcept {
   return Memory();
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wpmf-conversions"
+COIndex::FastCallFindFunc COIndex::GetFastCallFindFunc() const {
+  FastCallFindFunc f;
+  f.m_obj = this;
+  f.m_func = (FindFunc)(this->*(&COIndex::Find));
+  return f;
+}
+#endif
+
 } // namespace rocksdb

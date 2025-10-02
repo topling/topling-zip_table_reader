@@ -184,6 +184,9 @@ struct ToplingZipSubReader {
   Statistics* stats_;
   size_t storeOffset_;
   Slice prefix() const { return {(const char*)prefix_data_, prefix_len_}; }
+#if defined(__GNUC__) && !defined(__clang__)
+  COIndex::FastCallFindFunc indexFind_;
+#endif
   COIndexUP index_;
   unique_ptr<AbstractBlobStore> store_;
   ZTagArray tags_array_;
@@ -1673,7 +1676,7 @@ Status ToplingZipSubReader::GetRS(const ReadOptions& read_options,
 const {
   ROCKSDB_ASSERT_GE(ikey.size(), kNumInternalBytes);
   ParsedInternalKey pikey(ikey);
-  size_t keyId = index_->Find(pikey.user_key);
+  size_t keyId = IF_BOUND_PMF(indexFind_, index_->Find)(pikey.user_key);
   if (UNLIKELY(size_t(-1) == keyId)) {
     return Status::OK();
   }
@@ -1730,7 +1733,7 @@ const {
   ROCKSDB_ASSERT_GE(ikey.size(), kNumInternalBytes);
   ParsedInternalKey pikey(ikey);
   //auto t0 = qtime::now(); // qtime is fast enough, always timming
-  size_t recId = index_->Find(pikey.user_key);
+  size_t recId = IF_BOUND_PMF(indexFind_, index_->Find)(pikey.user_key);
   //auto t1 = qtime::now();
   //perf_context.read_index_block_nanos += t0.ns(t1);
   if (UNLIKELY(size_t(-1) == recId)) {
@@ -1861,7 +1864,7 @@ bool ToplingZipSubReader::PointGetRS(const Slice& ikey, valvec<byte_t>* val,
 const {
   ROCKSDB_ASSERT_GE(ikey.size(), kNumInternalBytes);
   Slice user_key = ExtractUserKey(ikey);
-  size_t keyId = index_->Find(user_key);
+  size_t keyId = IF_BOUND_PMF(indexFind_, index_->Find)(user_key);
   if (size_t(-1) == keyId) {
     return false;
   }
@@ -1885,7 +1888,7 @@ const {
 bool ToplingZipSubReader::PointGetZV(const Slice& ikey, valvec<byte_t>* val) const {
   ROCKSDB_ASSERT_GE(ikey.size(), kNumInternalBytes);
   Slice user_key = ExtractUserKey(ikey);
-  size_t recId = index_->Find(user_key);
+  size_t recId = IF_BOUND_PMF(indexFind_, index_->Find)(user_key);
   if (size_t(-1) == recId) {
     return false;
   }
@@ -2084,6 +2087,9 @@ size_t TooZipTableReaderBase::InitPart(
     part.index_ = COIndex::LoadMemory(mem, curr.key);
     MmapColdize(baseAddress + offset, curr.key);
   }
+#if defined(__GNUC__) && !defined(__clang__)
+  part.indexFind_ = part.index_->GetFastCallFindFunc();
+#endif
   part.storeOffset_ = offset += curr.key;
   if (hugepage_mem_.capacity() != 0) {
     StoreMetaUseHugePage(part.store_.get(), &hugepage_mem_);

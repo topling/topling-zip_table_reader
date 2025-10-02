@@ -118,6 +118,15 @@ public:
   virtual bool HasFastApproximateRank() const noexcept;
   virtual fstring ResidentMemory() const noexcept;
   void VerifyDictRank() const;
+#if defined(__GNUC__) && !defined(__clang__)
+  typedef size_t (*FindFunc)(const void*, fstring);
+  struct FastCallFindFunc {
+    const void* m_obj;
+    FindFunc    m_func;
+    size_t operator()(fstring key) const { return m_func(m_obj, key); }
+  };
+  virtual FastCallFindFunc GetFastCallFindFunc() const;
+#endif
 };
 
 inline fstring COIndex::Iterator::key() const noexcept {
