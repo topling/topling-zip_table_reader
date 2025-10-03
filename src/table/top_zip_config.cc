@@ -282,6 +282,7 @@ bool ToplingZipTableOptionsFromEnv(ToplingZipTableOptions& tzo) {
     }
   }
   MyGetDouble(tzo, indexCacheRatio         );
+  MyGetDouble(tzo, nltAcceptCompressionRatio);
 
   MyGetInt(tzo, minPreadLen);
 
