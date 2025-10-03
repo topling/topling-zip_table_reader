@@ -2583,7 +2583,7 @@ ToplingZipTableMultiReader::LowerBoundSubReader(fstring key) const {
     if (index == 0) {
       return nullptr;
     }
-    assert(prefixSet_[index - 1] <= key);
+    TERARK_ASSERT_S_LE(prefixSet_[index - 1].str(), key.str());
     return &subReader_[index - 1];
   }
   else {
