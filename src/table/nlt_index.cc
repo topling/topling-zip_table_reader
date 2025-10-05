@@ -306,16 +306,21 @@ public:
     auto trie = static_cast<const NLTrie*>(m_trie.get());
     FastCallFindFunc f;
     f.m_obj = trie;
+
+    #define SetFastCallFindFunc(FastLabel, TryDACache) \
+        do { auto p = &NLTrie::template index_impl<FastLabel, TryDACache>; \
+             f.m_func = (FindFunc)p; \
+        } while (0)
     if (trie->num_zpath_states())
       if (trie->has_da_cache())
-        f.m_func = (FindFunc)(trie->*&NLTrie::index_impl_11);
+        SetFastCallFindFunc(1,1);
       else
-        f.m_func = (FindFunc)(trie->*&NLTrie::index_impl_10);
+        SetFastCallFindFunc(1,0);
     else
       if (trie->has_da_cache())
-        f.m_func = (FindFunc)(trie->*&NLTrie::index_impl_01);
+        SetFastCallFindFunc(0,1);
       else
-        f.m_func = (FindFunc)(trie->*&NLTrie::index_impl_00);
+        SetFastCallFindFunc(0,0);
     return f;
   }
 #endif
