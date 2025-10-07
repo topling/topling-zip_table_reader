@@ -184,7 +184,7 @@ struct ToplingZipSubReader {
   Statistics* stats_;
   size_t storeOffset_;
   Slice prefix() const { return {(const char*)prefix_data_, prefix_len_}; }
-#if defined(__GNUC__) && !defined(__clang__)
+#if TOPLING_USE_BOUND_PMF
   COIndex::FastCallFindFunc indexFind_;
 #endif
   COIndexUP index_;
@@ -543,12 +543,11 @@ struct OneValuePerUK : public Base {
   static constexpr uint32_t value_index_ = 0;
   static constexpr bool is_one_value_per_uk = true;
 };
-#if defined(_MSC_VER) || defined(__clang__)
+#if !TOPLING_USE_BOUND_PMF
   #define IF_BOUND_PMF(Then, Else) Else
 #else
   #define IF_BOUND_PMF(Then, Else) Then
 typedef bool (*IterScanFN)(COIndex::Iterator*);
-#pragma GCC diagnostic ignored "-Wpmf-conversions"
 #endif
 template<class IterOpt>
 class ToplingZipTableIterBase : public IterOpt {
@@ -563,7 +562,7 @@ public:
   COIndex::Iterator*        iter_;
   const BlobStore*          store_; // to speed up IterGetRecordAppend
   BlobStore::get_record_append_CacheOffsets_func_t get_record_append_;
-#if defined(_MSC_VER) || defined(__clang__)
+#if !TOPLING_USE_BOUND_PMF
   terark_forceinline
   void IterGetRecordAppend(size_t recId, BlobStore::CacheOffsets* co) {
     (store_->*get_record_append_)(recId, co);
@@ -660,10 +659,9 @@ public:
     iter_ = sub->index_->NewIterator();
     store_ = sub->store_.get();
     get_record_append_ = store_->m_get_record_append_CacheOffsets;
-   #if defined(_MSC_VER) || defined(__clang__)
-   #else
-    iter_next_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Next));
-    iter_prev_ = (IterScanFN)(iter_->*(&COIndex::Iterator::Prev));
+   #if TOPLING_USE_BOUND_PMF
+    iter_next_ = ExtractFuncPtr<IterScanFN>(iter_, &COIndex::Iterator::Next);
+    iter_prev_ = ExtractFuncPtr<IterScanFN>(iter_, &COIndex::Iterator::Prev);
    #endif
     tag_rs_kind_ = sub->tag_rs_kind_;
   }
@@ -2087,7 +2085,7 @@ size_t TooZipTableReaderBase::InitPart(
     part.index_ = COIndex::LoadMemory(mem, curr.key);
     MmapColdize(baseAddress + offset, curr.key);
   }
-#if defined(__GNUC__) && !defined(__clang__)
+#if TOPLING_USE_BOUND_PMF
   part.indexFind_ = part.index_->GetFastCallFindFunc();
 #endif
   part.storeOffset_ = offset += curr.key;

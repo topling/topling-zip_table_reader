@@ -118,7 +118,7 @@ public:
   virtual bool HasFastApproximateRank() const noexcept;
   virtual fstring ResidentMemory() const noexcept;
   void VerifyDictRank() const;
-#if defined(__GNUC__) && !defined(__clang__)
+#if TOPLING_USE_BOUND_PMF
   typedef size_t (*FindFunc)(const void*, fstring);
   struct FastCallFindFunc {
     const void* m_obj;

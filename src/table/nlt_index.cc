@@ -300,22 +300,21 @@ public:
     auto trie = static_cast<const NLTrie*>(m_trie.get());
     return MyIterator::new_iter(trie);
   }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wpmf-conversions"
+#if TOPLING_USE_BOUND_PMF
   FastCallFindFunc GetFastCallFindFunc() const final {
-    auto trie = static_cast<const NLTrie*>(m_trie.get());
+    auto trie = static_cast<const typename NLTrie::super_class*>(m_trie.get());
     FastCallFindFunc f;
     f.m_obj = trie;
     if (trie->num_zpath_states())
       if (trie->has_da_cache())
-        f.m_func = (FindFunc)(trie->*&NLTrie::index_impl_11);
+        f.m_func = ExtractFuncPtr<FindFunc>(trie, &NLTrie::index_impl_11);
       else
-        f.m_func = (FindFunc)(trie->*&NLTrie::index_impl_10);
+        f.m_func = ExtractFuncPtr<FindFunc>(trie, &NLTrie::index_impl_10);
     else
       if (trie->has_da_cache())
-        f.m_func = (FindFunc)(trie->*&NLTrie::index_impl_01);
+        f.m_func = ExtractFuncPtr<FindFunc>(trie, &NLTrie::index_impl_01);
       else
-        f.m_func = (FindFunc)(trie->*&NLTrie::index_impl_00);
+        f.m_func = ExtractFuncPtr<FindFunc>(trie, &NLTrie::index_impl_00);
     return f;
   }
 #endif

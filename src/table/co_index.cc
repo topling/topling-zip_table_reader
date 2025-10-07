@@ -435,12 +435,11 @@ fstring COIndex::ResidentMemory() const noexcept {
   return Memory();
 }
 
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wpmf-conversions"
+#if TOPLING_USE_BOUND_PMF
 COIndex::FastCallFindFunc COIndex::GetFastCallFindFunc() const {
   FastCallFindFunc f;
   f.m_obj = this;
-  f.m_func = (FindFunc)(this->*(&COIndex::Find));
+  f.m_func = terark::ExtractFuncPtr<FindFunc>(this, &COIndex::Find);
   return f;
 }
 #endif
