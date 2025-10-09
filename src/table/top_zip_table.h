@@ -99,6 +99,9 @@ struct ToplingZipTableOptions {
   size_t fixedLenIndexCacheLeafSize = 512;
   //size_t maxRawKeyValueBytes = 0; // 0 indicate 5*target_file_size
 
+  float acceptEntropyStoreZipRatio = 0.7; // 0.0 ~ 1.0
+  bool  enableEntropyStore = false;
+
   bool   enableApproximateKeyAnchors = true;
   bool   enableCompositeUintIndex = false;
   bool   enableFixedLenHoleIndex = false;
