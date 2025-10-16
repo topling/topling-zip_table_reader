@@ -455,7 +455,10 @@ public:
     if (UNLIKELY(key.size() != cplen + keyLength_)) {
       return size_t(-1);
     }
-    if (UNLIKELY(memcmp(key.data(), commonPrefixData(), cplen) != 0)) {
+    // ToplingZipTableOptions.prefixLen <= 16 but there may be more
+    // common prefix after prefixLen, so max cplen may > 16 but must <= 32
+    TERARK_ASSERT_LE(cplen, 32);
+    if (UNLIKELY(!BytesEqualMaxLen32(key.data(), commonPrefixData(), cplen))) {
       return size_t(-1);
     }
     uint64_t findValue = ReadBigEndianUint64(key.data() + cplen, keyLength_);
