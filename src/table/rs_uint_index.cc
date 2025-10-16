@@ -451,7 +451,19 @@ public:
     write(indexSeq_.data(), indexSeq_.mem_size());
   }
   size_t Find(fstring key) const override {
+#if TOPLING_USE_BOUND_PMF
+    return FindT<-1>(key);
+  }
+  template<int CommonPrefixLenFixed>
+  size_t FindT(fstring key) const {
+    if (CommonPrefixLenFixed != -1) {
+      TERARK_ASSERT_EQ(CommonPrefixLenFixed, commonPrefixLen_);
+    }
+    const size_t cplen = CommonPrefixLenFixed != -1
+                       ? CommonPrefixLenFixed : commonPrefixLen_;
+#else
     const size_t cplen = commonPrefixLen_;
+#endif
     if (UNLIKELY(key.size() != cplen + keyLength_)) {
       return size_t(-1);
     }
@@ -471,6 +483,32 @@ public:
     }
     return indexSeq_.rank1(findPos);
   }
+#if TOPLING_USE_BOUND_PMF
+  FastCallFindFunc GetFastCallFindFunc() const override {
+    using terark::ExtractFuncPtr;
+    FastCallFindFunc f;
+    f.m_obj = this;
+    switch (commonPrefixLen_) {
+      default:
+        f.m_func = ExtractFuncPtr<FindFunc>(this, &UintIndex::Find);
+        break;
+#define case_(Len) \
+      case Len: \
+        f.m_func = ExtractFuncPtr<FindFunc>(this, &UintIndex::FindT<Len>); \
+        break
+      case_(0);
+      case_(1);
+      case_(2);
+      case_(3);
+      case_(4);
+      case_(5);
+      case_(6);
+      case_(7);
+      case_(8);
+    }
+    return f;
+  }
+#endif
   size_t AccurateRank(fstring key) const final {
     size_t id, pos;
     if (this->SeekImpl(key, id, pos)) {
