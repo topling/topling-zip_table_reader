@@ -247,6 +247,9 @@ struct NestLoudsTrieIndexBase : public COIndex {
     }
   }
 
+  virtual size_t core_mem_size() const terark_pure_func = 0;
+  virtual size_t shell_mem_size() const terark_pure_func = 0;
+
   json MetaToJson() const final {
     auto trie = m_trie.get();
     DFA_MmapHeader header = {};
@@ -261,7 +264,14 @@ struct NestLoudsTrieIndexBase : public COIndex {
     js["ZpathRatioN"] = (trie->num_zpath_states() + 0.01)/(trie->v_total_states() + 0.01);
     js["ZpathRatioL"] = (trie->total_zpath_len() + 0.01)/(trie->adfa_total_words_len() + 0.01);
     js["ZpathStates"] = trie->num_zpath_states();
-    js["ZpathSumLen"] = trie->total_zpath_len();
+    js["ZpathRawLen"] = trie->total_zpath_len();
+    js["ZpathZipLen"] = trie->mem_size() - this->shell_mem_size();
+    js["ZpathZipRatio"] = (trie->mem_size() - this->shell_mem_size() + 0.01)
+                        / (trie->total_zpath_len() + 0.01);
+    js["CoreMemSize"] = this->core_mem_size();
+    js["CoreOverZpath"] = (this->core_mem_size() + 0.01) / (trie->total_zpath_len() + 0.01);
+    js["ShellMemSize"] = SizeToString(this->shell_mem_size());
+    js["ShellMemRatio"] = 1.0 * this->shell_mem_size() / trie->mem_size();
     js["Version"] = header.version;
     //js["Type"] = header.dfa_class_name;
     return js;
@@ -327,6 +337,14 @@ public:
       auto trie = static_cast<NLTrie*>(m_trie.get());
       NestLoudsTrieBuildCache(trie, cacheRatio);
     }
+  }
+  size_t core_mem_size() const override terark_pure_func {
+    auto trie = static_cast<const NLTrie*>(m_trie.get());
+    return trie->core_mem_size();
+  }
+  size_t shell_mem_size() const override terark_pure_func {
+    auto trie = static_cast<const NLTrie*>(m_trie.get());
+    return trie->shell_mem_size();
   }
 
   class MyFactory : public MyBaseFactory {

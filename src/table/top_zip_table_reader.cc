@@ -2390,6 +2390,7 @@ static void JsonWebViewSubReader(const char* base, const ToplingZipSubReader& su
   ROCKSDB_JSON_SET_SIZE(ibase, NumKeys);
   ROCKSDB_JSON_SET_SIZE(ibase, TotalRawKeySize);
   ROCKSDB_JSON_SET_SIZE(ibase, TotalZipKeySize);
+  ibase["ZipRatio"] = ToStr("%.3f", double(TotalZipKeySize) / TotalRawKeySize);
   ibase["AvgZipKey"] = ToStr("%.3f", double(TotalZipKeySize) / NumKeys);
   ibase["AvgRawKey"] = ToStr("%.3f", double(TotalRawKeySize) / NumKeys);
   idx["Specific"] = sub.index_->MetaToJson();
