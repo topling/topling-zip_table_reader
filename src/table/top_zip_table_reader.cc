@@ -1004,19 +1004,22 @@ public:
     ROCKSDB_DIE("Bad tag_rs_kind_ = %d", tag_rs_kind_);
   }
   template<class SeqRS>
+  inline uint64_t BitposCurrKeyTagRS(const SeqRS& trs, size_t bitpos) const {
+    if (trs.is1(bitpos)) {
+      size_t idx = trs.rank1(bitpos);
+      return subReader_->tags_array_[idx];
+    } else {
+      return global_tag_;
+    }
+  }
+  template<class SeqRS>
   inline void DecodeCurrKeyTagRS(const SeqRS& trs) {
     TERARK_ASSERT_EQ(trs.size(), subReader_->store_->num_records());
     TERARK_ASSERT_LT(value_index_, value_count_);
     is_value_loaded_ = false;
     size_t bitpos = rs_bitpos_ + value_index_;
     TERARK_ASSERT_LT(bitpos, subReader_->store_->num_records());
-    uint64_t key_tag;
-    if (trs.is1(bitpos)) {
-      size_t idx = trs.rank1(bitpos);
-      key_tag = subReader_->tags_array_[idx];
-    } else {
-      key_tag = global_tag_;
-    }
+    uint64_t key_tag = BitposCurrKeyTagRS(trs, bitpos);
     EncodeFixed64((char*)iter_->key().end(), key_tag); // use extra 8 bytes
   }
   void DecodeCurrKeyTagZV() {
