@@ -20,12 +20,14 @@
 #ifndef _MSC_VER
 #include <terark/util/process.hpp>
 #endif
+#include <terark/util/nolocks_localtime.hpp>
 #include <float.h>
 
 const char* git_version_hash_info_topling_zip_table_reader();
 #ifdef HAS_TOPLING_ROCKS
 __attribute__((weak))
 const char* git_version_hash_info_topling_rocks();
+__attribute__((weak)) long toplingdb_expire_time();
 #endif
 
 namespace terark {
@@ -426,6 +428,10 @@ void JS_ZipTable_AddVersion(json& ver, bool html) {
     if (git_version_hash_info_topling_rocks)
       ver["gdzip-builder"] = git_version_hash_info_topling_rocks();
   #endif
+  }
+  using namespace terark;
+  if (toplingdb_expire_time) {
+    ver["expire-time"] = StrDateTimeEpochSec(toplingdb_expire_time() - 12345);
   }
 }
 
