@@ -326,7 +326,7 @@ public:
       assert(m_id != size_t(-1));
       assert(index_.indexSeq_[pos_]);
       assert(index_.indexSeq_.rank1(pos_) == m_id);
-      if (m_id == 0) {
+      if (UNLIKELY(m_id == 0)) {
         m_id = size_t(-1);
         return false;
       }
