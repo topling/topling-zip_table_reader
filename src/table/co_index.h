@@ -15,7 +15,7 @@ using terark::fstring;
 using terark::valvec;
 using terark::byte_t;
 using std::unique_ptr;
-using nlohmann::json;
+using topling::json;
 
 struct ToplingZipTableOptions;
 struct ImmutableOptions;
