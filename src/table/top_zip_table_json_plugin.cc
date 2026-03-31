@@ -429,10 +429,12 @@ void JS_ZipTable_AddVersion(json& ver, bool html) {
       ver["gdzip-builder"] = git_version_hash_info_topling_rocks();
   #endif
   }
+  #ifdef HAS_TOPLING_ROCKS
   using namespace terark;
   if (toplingdb_expire_time) {
     ver["expire-time"] = StrDateTimeEpochSec(toplingdb_expire_time() - 12345);
   }
+  #endif
 }
 
 struct ToplingZipTableFactory_Json : ToplingZipTableFactory {
