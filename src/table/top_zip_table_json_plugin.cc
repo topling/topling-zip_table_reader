@@ -413,6 +413,7 @@ static std::string HtmlGitHref(const char* git_repo, const char* git_hash) {
   return static_cast<std::string&&>(oss);
 }
 void JS_ZipTable_AddVersion(json& ver, bool html) {
+  using namespace terark;
   if (html) {
     ver["gdzip-reader"] = HtmlGitHref("topling/topling-zip_table_reader",
                          git_version_hash_info_topling_zip_table_reader());
@@ -421,20 +422,26 @@ void JS_ZipTable_AddVersion(json& ver, bool html) {
       ver["gdzip-builder"] = HtmlGitHref("rockeet/topling-rocks",
                             git_version_hash_info_topling_rocks());
     }
+    if (toplingdb_expire_time) {
+      ver["expire-time"] = fstring(StrDateTimeEpochSec(toplingdb_expire_time())) +
+        "<p>After expiration:</p>"
+        "<ol>"
+        "<li>ToplingZipTableBuilder will cease operation</li>"
+        "<li>ToplingZipTableReader remains functional; existing ToplingZipTable SST files can be accessed normally</li>"
+        "<li>For commercial use of ToplingZipTable, please <a href='mailto:contact@topling.cn'>contact us</a> to obtain a commercial license</li>"
+        "<li>Expiration time is fixed at compile time. Students and researchers may clean and recompile ToplingDB to extend usage</li>"
+        "</ol>";
+    }
   #endif
   } else {
     ver["gdzip-reader"] = git_version_hash_info_topling_zip_table_reader();
   #ifdef HAS_TOPLING_ROCKS
     if (git_version_hash_info_topling_rocks)
       ver["gdzip-builder"] = git_version_hash_info_topling_rocks();
+    if (toplingdb_expire_time)
+      ver["expire-time"] = StrDateTimeEpochSec(toplingdb_expire_time());
   #endif
   }
-  #ifdef HAS_TOPLING_ROCKS
-  using namespace terark;
-  if (toplingdb_expire_time) {
-    ver["expire-time"] = StrDateTimeEpochSec(toplingdb_expire_time() - 12345);
-  }
-  #endif
 }
 
 struct ToplingZipTableFactory_Json : ToplingZipTableFactory {
