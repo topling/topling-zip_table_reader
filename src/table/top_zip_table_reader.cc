@@ -259,9 +259,10 @@ struct ToplingZipSubReader {
   Status Get(const ReadOptions&, SequenceNumber, const Slice& key, GetContext*) const;
   size_t ApproximateRank(fstring key) const;
 
-  Status GetZV(const ReadOptions&, SequenceNumber, const Slice& key, GetContext*) const;
+  Status GetPIK(const ReadOptions&, SequenceNumber, const ParsedInternalKey&, GetContext*) const;
+  Status GetZV(const ReadOptions&, SequenceNumber, ParsedInternalKey, GetContext*) const;
   template<class KeyRS, class TagRS>
-  Status GetRS(const ReadOptions&, SequenceNumber, const Slice& key, GetContext*,
+  Status GetRS(const ReadOptions&, SequenceNumber, ParsedInternalKey, GetContext*,
                const KeyRS&, const TagRS&) const;
 
   bool PointGet(const Slice& key, valvec<byte_t>* val) const;
@@ -474,6 +475,11 @@ public:
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
              const SliceTransform*, bool skip_filters) override;
 
+#if defined(TOPLINGDB_OMIT_LOOKUP_KEY)
+  Status GetPIK(const ReadOptions&, const ParsedInternalKey&, GetContext*,
+                const SliceTransform*, bool skip_filters) override;
+#endif
+
   uint64_t ApproximateOffsetOf(ROCKSDB_8_X_COMMA(const ReadOptions& readopt) const Slice&, TableReaderCaller) override;
   uint64_t ApproximateSize(ROCKSDB_8_X_COMMA(const ReadOptions& readopt) const Slice&, const Slice&, TableReaderCaller) override;
   Status ApproximateKeyAnchors(const ReadOptions&, std::vector<Anchor>&) override;
@@ -500,6 +506,11 @@ public:
 
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
              const SliceTransform*, bool skip_filters) override;
+
+#if defined(TOPLINGDB_OMIT_LOOKUP_KEY)
+  Status GetPIK(const ReadOptions&, const ParsedInternalKey&, GetContext*,
+                const SliceTransform*, bool skip_filters) override;
+#endif
 
   uint64_t ApproximateOffsetOf(ROCKSDB_8_X_COMMA(const ReadOptions& readopt) const Slice&, TableReaderCaller) override;
   uint64_t ApproximateSize(ROCKSDB_8_X_COMMA(const ReadOptions& readopt) const Slice&, const Slice&, TableReaderCaller) override;
@@ -1654,13 +1665,20 @@ Status ToplingZipSubReader::Get(const ReadOptions& read_options,
                                SequenceNumber global_seqno, const Slice& ikey,
                                GetContext* get_context)
 const {
+  ROCKSDB_ASSERT_GE(ikey.size(), kNumInternalBytes);
+  return GetPIK(read_options, global_seqno, ParsedInternalKey(ikey), get_context);
+}
+
+Status ToplingZipSubReader::GetPIK(const ReadOptions& read_options,
+          SequenceNumber global_seqno, const ParsedInternalKey& pikey,
+          GetContext* get_context) const {
   switch (tag_rs_kind_) {
-  case LegacyZvType: return GetZV(read_options, global_seqno, ikey, get_context);
-  case RS_Key0_TagN: return GetRS(read_options, global_seqno, ikey, get_context, krs0_.krs_, krs0_.trsn_);
-  case RS_Key0_Tag0: return GetRS(read_options, global_seqno, ikey, get_context, krs0_.krs_, krs0_.trs0_);
-  case RS_Key0_Tag1: return GetRS(read_options, global_seqno, ikey, get_context, krs0_.krs_, krs0_.trs1_);
-  case RS_KeyN_TagN: return GetRS(read_options, global_seqno, ikey, get_context, krsx_     , krsx_.trs());
-  case RS_KeyN_Tag1: return GetRS(read_options, global_seqno, ikey, get_context, krsn_.krs_, krsn_.trs1_);
+  case LegacyZvType: return GetZV(read_options, global_seqno, pikey, get_context);
+  case RS_Key0_TagN: return GetRS(read_options, global_seqno, pikey, get_context, krs0_.krs_, krs0_.trsn_);
+  case RS_Key0_Tag0: return GetRS(read_options, global_seqno, pikey, get_context, krs0_.krs_, krs0_.trs0_);
+  case RS_Key0_Tag1: return GetRS(read_options, global_seqno, pikey, get_context, krs0_.krs_, krs0_.trs1_);
+  case RS_KeyN_TagN: return GetRS(read_options, global_seqno, pikey, get_context, krsx_     , krsx_.trs());
+  case RS_KeyN_Tag1: return GetRS(read_options, global_seqno, pikey, get_context, krsn_.krs_, krsn_.trs1_);
   }
   // should not goes here
   ROCKSDB_DIE("Bad tag_rs_kind_ = %d", tag_rs_kind_);
@@ -1679,12 +1697,10 @@ struct DeferFree : public Cleanable {
 
 template<class KeyRS, class TagRS>
 Status ToplingZipSubReader::GetRS(const ReadOptions& read_options,
-                                  SequenceNumber global_seqno, const Slice& ikey,
+                                  SequenceNumber global_seqno, ParsedInternalKey pikey,
                                   GetContext* get_context,
                                   const KeyRS& krs, const TagRS& trs)
 const {
-  ROCKSDB_ASSERT_GE(ikey.size(), kNumInternalBytes);
-  ParsedInternalKey pikey(ikey);
   size_t keyId = IF_BOUND_PMF(indexFind_, index_->Find)(pikey.user_key);
   if (UNLIKELY(size_t(-1) == keyId)) {
     return Status::OK();
@@ -1736,11 +1752,9 @@ const {
 }
 
 Status ToplingZipSubReader::GetZV(const ReadOptions& read_options,
-                                  SequenceNumber global_seqno, const Slice& ikey,
+                                  SequenceNumber global_seqno, ParsedInternalKey pikey,
                                   GetContext* get_context)
 const {
-  ROCKSDB_ASSERT_GE(ikey.size(), kNumInternalBytes);
-  ParsedInternalKey pikey(ikey);
   //auto t0 = qtime::now(); // qtime is fast enough, always timming
   size_t recId = IF_BOUND_PMF(indexFind_, index_->Find)(pikey.user_key);
   //auto t1 = qtime::now();
@@ -2267,6 +2281,23 @@ ToplingZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
   }
 }
 
+#if defined(TOPLINGDB_OMIT_LOOKUP_KEY)
+Status ToplingZipTableReader::GetPIK(const ReadOptions& ro,
+          const ParsedInternalKey& pikey, GetContext* get_context,
+          const SliceTransform* prefix_extractor, bool skip_filters) {
+  if (IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(0, LIKELY(0 == debugLevel_))) {
+    try {
+      return subReader_.GetPIK(ro, global_seqno_, pikey, get_context);
+    } catch (const std::exception& ex) {
+      return Status::Corruption("ToplingZipTableReader::GetPIK()", ex.what());
+    }
+  }
+  else { // let C++ runtime handle exception, will trap at throw in debugger
+    return subReader_.GetPIK(ro, global_seqno_, pikey, get_context);
+  }
+}
+#endif
+
 uint64_t ToplingZipTableReader::ApproximateOffsetOf(
       ROCKSDB_8_X_COMMA(const ReadOptions& readopt)
       const Slice& ikey, TableReaderCaller) {
@@ -2654,6 +2685,31 @@ ToplingZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCon
     return subReader->Get(ro, global_seqno_, ikey, get_context);
   }
 }
+
+#if defined(TOPLINGDB_OMIT_LOOKUP_KEY)
+Status ToplingZipTableMultiReader::GetPIK(const ReadOptions& ro,
+          const ParsedInternalKey& pikey, GetContext* get_context,
+          const SliceTransform* prefix_extractor, bool skip_filters) {
+  size_t pref_len = prefixSet_.m_fixlen;
+  if (UNLIKELY(pikey.user_key.size() < pref_len)) {
+    return Status::OK(); // must not found, return OK
+  }
+  auto subReader = LowerBoundSubReader(fstring(pikey.user_key.data_, pref_len));
+  if (UNLIKELY(!subReader)) { // memcmp prefix fail is very unlikely, skip it
+    return Status::OK();
+  }
+  if (IF_TOP_ZIP_TABLE_KEEP_EXCEPTION(0, LIKELY(0 == debugLevel_))) {
+    try {
+      return subReader->GetPIK(ro, global_seqno_, pikey, get_context);
+    } catch (const std::exception& ex) {
+      return Status::Corruption("ToplingZipTableMultiReader::GetPIK()", ex.what());
+    }
+  }
+  else { // let C++ runtime handle exception, will trap at throw in debugger
+    return subReader->GetPIK(ro, global_seqno_, pikey, get_context);
+  }
+}
+#endif
 
 uint64_t ToplingZipTableMultiReader::ApproximateOffsetOf(
       ROCKSDB_8_X_COMMA(const ReadOptions& readopt)
