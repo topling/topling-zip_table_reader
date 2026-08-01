@@ -2151,6 +2151,7 @@ ToplingZipTableReader::Open(RandomAccessFileReader* file, Slice file_data,
   LoadStore(&subReader_, info, getVerifyDict(dict_));
   ConfigureHugePage(&subReader_, info, tro);
   size_t offset = InitPart(0, 0, subReader_, info, tro, getVerifyDict(dict_));
+  ApplyGlobalSeqnoToRangeDel(file, tro, file_size, kToplingZipTableMagicNumber);
   if (info.krceVec_) {
     subReader_.InitKeyRankCache(file_data.data_ + offset, *info.krceVec_);
   }
@@ -2780,6 +2781,7 @@ ToplingZipTableMultiReader::Open(RandomAccessFileReader* file, Slice file_data,
   TERARK_VERIFY(!offsetBlock.data.empty());
   ReadGlobalDict(tro);
   Init(info, tro);
+  ApplyGlobalSeqnoToRangeDel(file, tro, file_size, kToplingZipTableMagicNumber);
   long long t0 = g_pf.now();
   SetupForRandomRead();
   long long t1 = g_pf.now();
